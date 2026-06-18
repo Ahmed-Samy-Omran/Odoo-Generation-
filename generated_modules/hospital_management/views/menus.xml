@@ -1,0 +1,16 @@
+<odoo>
+    <data>
+        <menuitem id="hospital management_menu"
+                  name="Hospital Management"
+                  sequence="10"/>
+        <menuitem id="patients_menu"
+                  name="Patients"
+parent="hospital_management.menu_hospital_management_menu"action="hospital_management.patients_action"                  sequence="10"/>
+        <menuitem id="doctors_menu"
+                  name="Doctors"
+parent="hospital_management.menu_hospital_management_menu"action="hospital_management.doctors_action"                  sequence="20"/>
+        <menuitem id="appointments_menu"
+                  name="Appointments"
+parent="hospital_management.menu_hospital_management_menu"action="hospital_management.appointments_action"                  sequence="30"/>
+    </data>
+</odoo>

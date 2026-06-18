@@ -33,5 +33,8 @@ class {{ class_name }}(models.Model):
         comodel_name='{{ field.relation }}',
         relation='{{ field.relation_table | default("") }}',
         {%- endif %}
+        {%- if field.type == 'selection' and field.selection_options %}
+        selection={{ field.selection_options }},
+        {%- endif %}
     )
 {% endfor %}

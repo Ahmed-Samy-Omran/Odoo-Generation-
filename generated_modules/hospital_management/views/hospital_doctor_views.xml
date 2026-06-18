@@ -1,0 +1,49 @@
+<odoo>
+    <data>
+        <!-- Tree View for Doctor Records -->
+        <record id="hospital_doctor_tree_view" model="ir.ui.view">
+            <field name="name">hospital.doctor.tree</field>
+            <field name="model">hospital.doctor</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="specialty"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Doctor Records -->
+        <record id="hospital_doctor_form_view" model="ir.ui.view">
+            <field name="name">hospital.doctor.form</field>
+            <field name="model">hospital.doctor</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="specialty"/>
+                            <field name="patient_ids"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for Doctor Records -->
+        <record id="hospital_doctor_search_view" model="ir.ui.view">
+            <field name="name">hospital.doctor.search</field>
+            <field name="model">hospital.doctor</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                    <field name="specialty"/>
+                    <separator/>
+                    <filter name="doctors_with_patients" string="Doctors with Patients" domain="[('patient_ids', '!=', False)]"/>
+                    <group expand="0" string="Group By">
+                        <filter name="specialty" string="Specialty" context="{\'group_by\': \'specialty\'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+    </data>
+</odoo>
