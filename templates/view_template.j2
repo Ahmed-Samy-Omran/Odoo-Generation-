@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+        <record id="view_{{ model_name | replace('.', '_') }}_form" model="ir.ui.view">
+            <field name="name">{{ model_label }} Form</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <group>
+{%- for field in fields %}
+    {%- if loop.index is odd %}
+                                <field name="{{ field.name }}" />
+    {%- endif %}
+{%- endfor %}
+                            </group>
+                            <group>
+{%- for field in fields %}
+    {%- if loop.index is even %}
+                                <field name="{{ field.name }}" />
+    {%- endif %}
+{%- endfor %}
+                            </group>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_{{ model_name | replace('.', '_') }}_tree" model="ir.ui.view">
+            <field name="name">{{ model_label }} Tree</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <tree>
+{%- set count = 0 %}
+{%- for field in fields %}
+    {%- if field.type not in ['one2many', 'many2many'] and count < 4 %}
+                    <field name="{{ field.name }}" />
+        {%- set count = count + 1 %}
+    {%- endif %}
+{%- endfor %}
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_{{ model_name | replace('.', '_') }}_search" model="ir.ui.view">
+            <field name="name">{{ model_label }} Search</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <search>
+{%- for field in fields %}
+    {%- if field.type not in ['one2many', 'many2many'] %}
+                    <field name="{{ field.name }}" />
+    {%- endif %}
+{%- endfor %}
+                </search>
+            </field>
+        </record>
+
+        <record id="action_{{ model_name | replace('.', '_') }}" model="ir.actions.act_window">
+            <field name="name">{{ model_label }}</field>
+            <field name="res_model">{{ model_name }}</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">
+                    Create a new {{ model_label | lower }}
+                </p>
+            </field>
+        </record>
+
+        <menuitem
+            id="menu_{{ model_name | replace('.', '_') }}_root"
+            name="{{ model_label }} Management"
+            web_icon="base,static/description/icon.png"
+            sequence="10" />
+
+        <menuitem
+            id="menu_{{ model_name | replace('.', '_') }}_child"
+            name="{{ model_label }}"
+            parent="menu_{{ model_name | replace('.', '_') }}_root"
+            action="action_{{ model_name | replace('.', '_') }}"
+            sequence="10" />
+    </data>
+</odoo>

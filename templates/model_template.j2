@@ -1,0 +1,37 @@
+# -*- coding: utf-8 -*-
+from odoo import models, fields
+
+class {{ class_name }}(models.Model):
+    _name = '{{ model_name }}'
+    _description = '{{ model_description | default("") }}'
+{%- if rec_name %}
+    _rec_name = '{{ rec_name }}'
+{%- endif %}
+
+{% for field in fields %}
+    {%- if field.type == 'many2one' -%}
+    {{ field.name }} = fields.Many2one(
+    {%- elif field.type == 'one2many' -%}
+    {{ field.name }} = fields.One2many(
+    {%- elif field.type == 'many2many' -%}
+    {{ field.name }} = fields.Many2many(
+    {%- else -%}
+    {{ field.name }} = fields.{{ field.type | capitalize }}(
+    {%- endif %}
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+        {%- if field.required %}
+        required=True,
+        {%- endif %}
+        {%- if field.type == 'many2one' %}
+        comodel_name='{{ field.relation }}',
+        {%- endif %}
+        {%- if field.type == 'one2many' %}
+        comodel_name='{{ field.relation }}',
+        inverse_name='{{ field.inverse_name }}',
+        {%- endif %}
+        {%- if field.type == 'many2many' %}
+        comodel_name='{{ field.relation }}',
+        relation='{{ field.relation_table | default("") }}',
+        {%- endif %}
+    )
+{% endfor %}
