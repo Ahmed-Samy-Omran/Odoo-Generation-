@@ -1,0 +1,18 @@
+<odoo>
+    <data>
+        <record id="patients_action" model="ir.actions.act_window">
+            <field name="name">Patients</field>
+            <field name="res_model">hospital_module.patient</field>
+            <field name="view_mode">tree,form</field>
+<field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage hospital patients</p>
+            </field>        </record>
+        <record id="doctors_action" model="ir.actions.act_window">
+            <field name="name">Doctors</field>
+            <field name="res_model">hospital_module.doctor</field>
+            <field name="view_mode">tree,form</field>
+<field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage hospital doctors</p>
+            </field>        </record>
+    </data>
+</odoo>

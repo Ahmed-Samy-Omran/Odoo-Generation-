@@ -1,0 +1,1 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlinkaccess_hospital_module_patient_user,Patient Records Access,model_hospital_module_patient,base.group_user,1,1,1,1access_hospital_module_doctor_user,Doctor Records Access,model_hospital_module_doctor,base.group_user,1,1,1,1

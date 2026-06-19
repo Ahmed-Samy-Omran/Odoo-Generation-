@@ -1,6 +1,7 @@
 import os
 import json
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 from app.models.schemas import ModuleConfig
 
@@ -12,23 +13,8 @@ class AIService:
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY not found in environment variables. Please set it.")
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config={
-                "temperature": 0.7,
-                "top_p": 0.95,
-                "top_k": 64,
-                "max_output_tokens": 8192,
-                "response_mime_type": "application/json",
-            },
-            safety_settings=[
-                {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-                {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_MEDIUM_AND_ABOVE"},
-            ]
-        )
+        self.client = genai.Client(api_key=api_key)
+        self.model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
     def analyze_requirements(self, user_prompt: str) -> ModuleConfig:
         prompt = f"""You are an expert Odoo module developer. Your task is to analyze user requirements and generate a JSON configuration for an Odoo module. The JSON should strictly adhere to the following Pydantic schema. Do not include any additional text or formatting outside of the JSON object. Ensure all required fields are present and types are correct.
@@ -105,10 +91,18 @@ Example for 'I need a Hospital Management System with patients and doctors':
 }}
 ```
 """
-        convo = self.model.start_chat(history=[])
-        response = convo.send_message(prompt)
+        response = self.client.models.generate_content(
+            model=self.model_name,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.7,
+                top_p=0.95,
+                top_k=64,
+                max_output_tokens=8192,
+                response_mime_type="application/json",
+            ),
+        )
 
-        # Parse the JSON response and validate with Pydantic
         try:
             json_response = json.loads(response.text)
             validated_config = ModuleConfig(**json_response)
@@ -117,4 +111,3 @@ Example for 'I need a Hospital Management System with patients and doctors':
             raise ValueError(f"AI response was not valid JSON: {e}\nResponse: {response.text}")
         except Exception as e:
             raise ValueError(f"AI response did not match schema: {e}\nResponse: {response.text}")
-

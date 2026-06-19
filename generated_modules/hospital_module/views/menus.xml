@@ -1,0 +1,13 @@
+<odoo>
+    <data>
+        <menuitem id="hospital module_menu"
+                  name="Hospital Module"
+                  sequence="10"/>
+        <menuitem id="patients_menu"
+                  name="Patients"
+parent="hospital_module.menu_hospital_module_menu"action="hospital_module.patients_action"                  sequence="10"/>
+        <menuitem id="doctors_menu"
+                  name="Doctors"
+parent="hospital_module.menu_hospital_module_menu"action="hospital_module.doctors_action"                  sequence="20"/>
+    </data>
+</odoo>
