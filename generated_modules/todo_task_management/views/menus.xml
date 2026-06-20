@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="todo_task_management_menu"
+                  name="Todo Task Management"
+                  sequence="10"/>
+        <menuitem id="todo_tasks_menu"
+                  name="Todo Tasks"
+                  parent="todo_task_management_menu"
+                  action="todo_tasks_action"
+                  sequence="10"/>
+    </data>
+</odoo>

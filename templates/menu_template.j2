@@ -1,11 +1,15 @@
 <odoo>
     <data>
-        {% for menu in menus %}
-        <menuitem id="{{ menu.name | lower | replace(".", "_") }}_menu"
+{% for menu in menus %}
+        <menuitem id="{{ menu.name | lower | replace('.', '_') | replace(' ', '_') }}_menu"
                   name="{{ menu.name }}"
-                  {% if menu.parent_xml_id %}parent="{{ menu.parent_xml_id }}"{% endif %}
-                  {% if menu.action_xml_id %}action="{{ menu.action_xml_id }}"{% endif %}
+{% if menu.parent_xml_id %}
+                  parent="{{ menu.parent_xml_id }}"
+{% endif %}
+{% if menu.action_xml_id %}
+                  action="{{ menu.action_xml_id }}"
+{% endif %}
                   sequence="{{ menu.sequence }}"/>
-        {% endfor %}
+{% endfor %}
     </data>
 </odoo>

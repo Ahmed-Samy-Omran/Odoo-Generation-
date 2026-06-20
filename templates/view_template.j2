@@ -30,8 +30,8 @@
             </field>
         </record>
 
-        <!-- Search View for {{ model_label }} -->
         {% if search_view %}
+        <!-- Search View for {{ model_label }} -->
         <record id="{{ model_name | replace(".", "_") }}_search_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.search</field>
             <field name="model">{{ model_name }}</field>
@@ -49,7 +49,7 @@
                     {% if search_view.group_by %}
                     <group expand="0" string="Group By">
                         {% for group_by in search_view.group_by %}
-                        <filter name="{{ group_by.name }}" string="{{ group_by.string }}" context="{{ '{' }}\'group_by\': \'{{ group_by.name }}\'{{ '}' }}"/>
+                        <filter name="{{ group_by.name }}" string="{{ group_by.string }}" context="{'group_by': '{{ group_by.name }}'}"/>
                         {% endfor %}
                     </group>
                     {% endif %}

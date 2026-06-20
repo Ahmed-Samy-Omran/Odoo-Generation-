@@ -35,6 +35,10 @@ class OdooModuleGenerator:
             Path to generated module directory
         """
         self.output_dir = output_dir
+        
+        # Preprocess and clean config
+        config = self._preprocess_config(config)
+        
         module_name = config.get('module_name', 'custom_module')
         module_path = os.path.join(output_dir, module_name)
 
@@ -51,6 +55,92 @@ class OdooModuleGenerator:
         self._generate_init_files(config, module_path)
 
         return module_path
+
+    def _preprocess_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Preprocess and clean up the config to ensure correct casing and reference resolving"""
+        module_name = config.get('module_name', 'custom_module')
+
+        # 1. Normalize field types to lowercase and populate missing view fields
+        for model in config.get('models', []):
+            fields = model.get('fields', [])
+            field_names = []
+            for field in fields:
+                if 'type' in field:
+                    field['type'] = field['type'].lower()
+                if field.get('name'):
+                    field_names.append(field['name'])
+
+            if not model.get('tree_view_fields'):
+                model['tree_view_fields'] = field_names[:5]
+            if not model.get('form_view_fields'):
+                model['form_view_fields'] = field_names
+
+        # 2. Build XML ID maps for local menus and actions
+        def clean_name(name: str) -> str:
+            return name.lower().replace('.', '_').replace(' ', '_')
+
+        menu_id_map = {}
+        for menu in config.get('menus', []):
+            name = menu.get('name', '')
+            if not name:
+                continue
+            gen_id = f"{clean_name(name)}_menu"
+            snake_name = clean_name(name)
+            
+            # Map various ways AI might refer to this menu to the actual ID
+            for ref in [gen_id, snake_name, f"menu_{snake_name}", f"menu_{snake_name}_menu", f"menu_{snake_name}_root"]:
+                menu_id_map[ref] = gen_id
+
+        action_id_map = {}
+        for action in config.get('actions', []):
+            name = action.get('name', '')
+            if not name:
+                continue
+            gen_id = f"{clean_name(name)}_action"
+            snake_name = clean_name(name)
+            
+            for ref in [gen_id, snake_name, f"action_{snake_name}", f"action_{snake_name}_action"]:
+                action_id_map[ref] = gen_id
+
+        # 3. Resolve parent_xml_id and action_xml_id references
+        for menu in config.get('menus', []):
+            # Resolve parent_xml_id
+            parent = menu.get('parent_xml_id')
+            if parent:
+                parts = parent.split('.')
+                ref_id = parts[-1]
+                if ref_id in menu_id_map:
+                    menu['parent_xml_id'] = menu_id_map[ref_id]
+                elif len(parts) > 1:
+                    prefix = parts[0]
+                    if prefix == module_name or prefix in ['hospital_management', 'gym_management', 'custom_module']:
+                        if ref_id in menu_id_map:
+                            menu['parent_xml_id'] = menu_id_map[ref_id]
+                        else:
+                            # Default to the first root menu if prefix matches but ID is not found
+                            root_menus = [m for m in config.get('menus', []) if not m.get('parent_xml_id')]
+                            if root_menus:
+                                menu['parent_xml_id'] = f"{clean_name(root_menus[0]['name'])}_menu"
+
+            # Resolve action_xml_id
+            action_ref = menu.get('action_xml_id')
+            if action_ref:
+                parts = action_ref.split('.')
+                ref_id = parts[-1]
+                if ref_id in action_id_map:
+                    menu['action_xml_id'] = action_id_map[ref_id]
+                elif len(parts) > 1:
+                    prefix = parts[0]
+                    if prefix == module_name or prefix in ['hospital_management', 'gym_management', 'custom_module']:
+                        if ref_id in action_id_map:
+                            menu['action_xml_id'] = action_id_map[ref_id]
+                else:
+                    menu_snake = clean_name(menu.get('name', ''))
+                    guessed_id = f"{menu_snake}_action"
+                    if guessed_id in action_id_map:
+                        menu['action_xml_id'] = guessed_id
+
+        return config
 
     def _create_directory_structure(self, module_path: str) -> None:
         """Create the basic Odoo module directory structure"""
@@ -199,14 +289,14 @@ class OdooModuleGenerator:
         # Models __init__.py
         models_init_template = self.env.get_template('models_init_template.j2')
 
-        # Pass model class names to the template
-        model_class_names = []
+        # Pass model file names to the template (e.g., 'hospital_patient')
+        model_files = []
         for model in config.get('models', []):
-            class_name = ''.join(word.capitalize() for word in model.get('name', '').replace('.', '_').split('_'))
-            model_class_names.append(class_name)
+            model_file_name = model.get('name', 'model').replace('.', '_')
+            model_files.append(model_file_name)
 
         models_init_content = models_init_template.render(
-            model_class_names=model_class_names
+            model_files=model_files
         )
 
         models_init_file = os.path.join(module_path, 'models', '__init__.py')
