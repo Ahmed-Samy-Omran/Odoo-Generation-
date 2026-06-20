@@ -51,6 +51,10 @@ class ModelDefinition(BaseModel):
 class ModuleConfig(BaseModel):
     module_name: str
     module_description: Optional[str] = ""
+    depends: Optional[List[str]] = ["base"]
     models: List[ModelDefinition]
     actions: Optional[List[ActionModel]] = None
     menus: Optional[List[MenuModel]] = None
+
+class GeneratorPayload(BaseModel):
+    modules: List[ModuleConfig]

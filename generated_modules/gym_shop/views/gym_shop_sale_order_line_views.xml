@@ -1,0 +1,36 @@
+<odoo>
+    <data>
+        <!-- Tree View for Individual items in a sale order. -->
+        <record id="gym_shop_sale_order_line_tree_view" model="ir.ui.view">
+            <field name="name">gym_shop.sale_order_line.tree</field>
+            <field name="model">gym_shop.sale_order_line</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="product_id"/>
+                    <field name="quantity"/>
+                    <field name="unit_price"/>
+                    <field name="subtotal"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Individual items in a sale order. -->
+        <record id="gym_shop_sale_order_line_form_view" model="ir.ui.view">
+            <field name="name">gym_shop.sale_order_line.form</field>
+            <field name="model">gym_shop.sale_order_line</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="quantity"/>
+                            <field name="unit_price"/>
+                            <field name="subtotal"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

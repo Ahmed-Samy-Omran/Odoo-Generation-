@@ -7,7 +7,7 @@ import os
 import zipfile
 import shutil
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List
 
 
 class ZipHandler:
@@ -40,6 +40,19 @@ class ZipHandler:
             ZipHandler._add_directory_to_zip(zipf, module_path)
 
         return output_path
+
+    @staticmethod
+    def create_batch_zip(module_paths: List[str], zip_path: str) -> str:
+        """
+        Create a single ZIP file containing multiple modules at the root of the ZIP
+        """
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for module_path in module_paths:
+                if not os.path.isdir(module_path):
+                    continue
+                module_name = os.path.basename(module_path)
+                ZipHandler._add_directory_to_zip(zipf, module_path, arcname=module_name)
+        return zip_path
 
     @staticmethod
     def _add_directory_to_zip(zipf: zipfile.ZipFile, directory: str, arcname: str = '') -> None:

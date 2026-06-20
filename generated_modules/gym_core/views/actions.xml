@@ -1,0 +1,28 @@
+<odoo>
+    <data>
+        <record id="membership_types_action" model="ir.actions.act_window">
+            <field name="name">Membership Types</field>
+            <field name="res_model">gym_core.membership_type</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage different types of gym memberships</p>
+            </field>
+        </record>
+        <record id="trainers_action" model="ir.actions.act_window">
+            <field name="name">Trainers</field>
+            <field name="res_model">gym_core.trainer</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym trainers</p>
+            </field>
+        </record>
+        <record id="members_action" model="ir.actions.act_window">
+            <field name="name">Members</field>
+            <field name="res_model">gym_core.member</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym members</p>
+            </field>
+        </record>
+    </data>
+</odoo>

@@ -4,7 +4,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from app.models.schemas import ModuleConfig
+from app.models.schemas import GeneratorPayload
 from app.generators.OdooModuleGenerator import OdooModuleGenerator
 from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
@@ -36,27 +36,32 @@ def read_root():
 
 
 @app.post("/generate-module/")
-async def generate_module(config: ModuleConfig):
+async def generate_module(payload: GeneratorPayload):
     """
-    يستقبل تكوين الموديول كـ JSON، يقوم بتوليد الملفات، ثم يرجع ملف ZIP.
+    يستقبل تكوين الموديولات كـ JSON، يقوم بتوليد الملفات، ثم يرجع ملف ZIP يحتوي عليها جميعًا.
     """
     try:
-        # 1. تحويل Pydantic model إلى dictionary
-        config_data = config.model_dump()
-        module_name = config_data.get("module_name", "custom_module")
+        payload_data = payload.model_dump()
+        modules = payload_data.get("modules", [])
+        if not modules:
+            raise HTTPException(status_code=400, detail="No modules specified in configuration")
 
-        # 2. تشغيل محرك التوليد
         generator = OdooModuleGenerator(templates_dir=TEMPLATES_DIR)
-        module_path = generator.generate_module(config_data, output_dir=OUTPUT_DIR)
+        module_paths = []
+        
+        for config_data in modules:
+            module_path = generator.generate_module(config_data, output_dir=OUTPUT_DIR)
+            module_paths.append(module_path)
 
-        # 3. ضغط الموديول في ملف ZIP
-        zip_path = ZipHandler.create_module_zip(module_path)
+        zip_name = f"{modules[0].get('module_name', 'custom_module')}_batch.zip" if len(modules) > 1 else f"{modules[0].get('module_name', 'custom_module')}.zip"
+        zip_path = os.path.join(OUTPUT_DIR, zip_name)
+        
+        ZipHandler.create_batch_zip(module_paths, zip_path)
 
-        # 4. إرجاع ملف الـ ZIP للمستخدم
         if os.path.exists(zip_path):
             return FileResponse(
                 path=zip_path,
-                filename=f"{module_name}.zip",
+                filename=zip_name,
                 media_type="application/x-zip-compressed"
             )
         else:
@@ -73,24 +78,32 @@ async def analyze_requirements_and_generate(user_prompt: UserPrompt):
     """
     try:
         # 1. تحليل متطلبات المستخدم باستخدام AI
-        config = ai_service.analyze_requirements(user_prompt.prompt)
+        payload = ai_service.analyze_requirements(user_prompt.prompt)
 
         # 2. تحويل Pydantic model إلى dictionary
-        config_data = config.model_dump()
-        module_name = config_data.get("module_name", "custom_module")
+        payload_data = payload.model_dump()
+        modules = payload_data.get("modules", [])
+        if not modules:
+            raise HTTPException(status_code=400, detail="No modules analyzed from the prompt")
 
-        # 3. تشغيل محرك التوليد
         generator = OdooModuleGenerator(templates_dir=TEMPLATES_DIR)
-        module_path = generator.generate_module(config_data, output_dir=OUTPUT_DIR)
+        module_paths = []
+        
+        for config_data in modules:
+            module_path = generator.generate_module(config_data, output_dir=OUTPUT_DIR)
+            module_paths.append(module_path)
 
-        # 4. ضغط الموديول في ملف ZIP
-        zip_path = ZipHandler.create_module_zip(module_path)
+        # 3. ضغط الموديولات في ملف ZIP
+        zip_name = f"{modules[0].get('module_name', 'custom_module')}_batch.zip" if len(modules) > 1 else f"{modules[0].get('module_name', 'custom_module')}.zip"
+        zip_path = os.path.join(OUTPUT_DIR, zip_name)
+        
+        ZipHandler.create_batch_zip(module_paths, zip_path)
 
-        # 5. إرجاع ملف الـ ZIP للمستخدم
+        # 4. إرجاع ملف الـ ZIP للمستخدم
         if os.path.exists(zip_path):
             return FileResponse(
                 path=zip_path,
-                filename=f"{module_name}.zip",
+                filename=zip_name,
                 media_type="application/x-zip-compressed"
             )
         else:

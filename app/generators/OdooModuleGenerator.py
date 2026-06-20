@@ -172,6 +172,7 @@ class OdooModuleGenerator:
         content = template.render(
             module_name=config.get('module_name', 'custom_module'),
             module_description=config.get('module_description', ''),
+            depends=config.get('depends', ['base']),
             data_files=data_files
         )
 

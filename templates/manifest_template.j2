@@ -5,7 +5,7 @@
     'category': 'Tools',
     'summary': '{{ module_description | default("Custom Module") }}',
     'author': 'Generated Module',
-    'depends': ['base'],
+    'depends': {{ depends | default(['base']) }},
     'data': [
         {% for data_file in data_files %}
         '{{ data_file }}',
