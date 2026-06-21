@@ -35,10 +35,10 @@ class OdooModuleGenerator:
             Path to generated module directory
         """
         self.output_dir = output_dir
-        
+
         # Preprocess and clean config
         config = self._preprocess_config(config)
-        
+
         module_name = config.get('module_name', 'custom_module')
         module_path = os.path.join(output_dir, module_name)
 
@@ -86,7 +86,7 @@ class OdooModuleGenerator:
                 continue
             gen_id = f"{clean_name(name)}_menu"
             snake_name = clean_name(name)
-            
+
             # Map various ways AI might refer to this menu to the actual ID
             for ref in [gen_id, snake_name, f"menu_{snake_name}", f"menu_{snake_name}_menu", f"menu_{snake_name}_root"]:
                 menu_id_map[ref] = gen_id
@@ -98,7 +98,7 @@ class OdooModuleGenerator:
                 continue
             gen_id = f"{clean_name(name)}_action"
             snake_name = clean_name(name)
-            
+
             for ref in [gen_id, snake_name, f"action_{snake_name}", f"action_{snake_name}_action"]:
                 action_id_map[ref] = gen_id
 
