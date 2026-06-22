@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 
 class {{ class_name }}(models.Model):
 {% if is_inherit %}
@@ -16,7 +16,20 @@ class {{ class_name }}(models.Model):
 {% endif %}
 
 {% for field in fields %}
-{% if field.type == 'many2one' %}
+{% if field.is_compute %}
+    {{ field.name }} = fields.{{ field.type | capitalize }}(
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+        compute='_compute_{{ field.name }}',
+    )
+
+    {% if field.depends_fields %}
+    @api.depends({{ field.depends_fields | join(', ') | replace("'", "'") }})
+    {% endif %}
+    def _compute_{{ field.name }}(self):
+        for rec in self:
+            {{ field.compute_code | indent(12) }}
+
+{% elif field.type == 'many2one' %}
     {{ field.name }} = fields.Many2one(
         comodel_name='{{ field.relation }}',
         string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
