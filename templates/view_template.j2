@@ -1,5 +1,20 @@
 <odoo>
     <data>
+{% if is_customization %}
+        <!-- Inherited Form View for {{ model_name }} -->
+        <record id="{{ model_name | replace(".", "_") }}_inherit_form_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.inherit.form</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="inherit_id" ref="{{ inherit_model | replace(".", "_") }}_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet/group" position="inside">
+                    {% for field in fields %}
+                    <field name="{{ field.name }}"/>
+                    {% endfor %}
+                </xpath>
+            </field>
+        </record>
+{% else %}
         <!-- Tree View for {{ model_label }} -->
         <record id="{{ model_name | replace(".", "_") }}_tree_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.tree</field>
@@ -57,5 +72,6 @@
             </field>
         </record>
         {% endif %}
+{% endif %}
     </data>
 </odoo>

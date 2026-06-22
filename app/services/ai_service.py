@@ -21,6 +21,11 @@ class AIService:
 
 If the user request is huge or naturally splits into parts, generate multiple modules and handle dependencies via the "depends" field.
 
+Inheritance Logic:
+- If the requirement is to extend an existing Odoo model (e.g., res.partner, sale.order), set "is_inherit" to true and "inherit_model" to the name of the model being extended.
+- If it's a customization (adding fields to an existing model without creating a new one), set "is_customization" to true. In this case, "name" should be the same as "inherit_model".
+- If "is_inherit" is true but "is_customization" is false, it means you are creating a new model that inherits from an existing one (classical inheritance).
+
 Schema Definition:
 {GeneratorPayload.model_json_schema()}
 
@@ -28,69 +33,24 @@ User Request: {user_prompt}
 
 Generate the JSON configuration for the Odoo modules based on the user's request. Focus on extracting modules, models, fields, their types, labels, and any relations. If the user mentions filters or group_by options for a search view, include them. If tree_view_fields or form_view_fields are not explicitly mentioned, you can infer them from the defined fields. For actions and menus, create sensible defaults based on the models. The module name should be lowercase and use underscores for spaces. Model names should be in the format 'module_name.model_name'.
 
-Example for 'I need a Hospital Management System with patients and doctors':
+Example for 'I need to add a nickname to res.partner':
 ```json
 {{
   "modules": [
     {{
-      "module_name": "hospital_management",
-      "module_description": "Module for managing hospital patients and doctors",
+      "module_name": "partner_nickname",
+      "module_description": "Adds nickname to partners",
       "depends": ["base"],
       "models": [
         {{
-          "name": "hospital_management.patient",
-          "description": "Patient Records",
-          "rec_name": "name",
+          "name": "res.partner",
+          "description": "Partner with nickname",
+          "is_inherit": true,
+          "inherit_model": "res.partner",
+          "is_customization": true,
           "fields": [
-            {{"name": "name", "type": "char", "label": "Patient Name", "required": true}},
-            {{"name": "age", "type": "integer", "label": "Age"}},
-            {{"name": "doctor_id", "type": "many2one", "label": "Primary Doctor", "relation": "hospital_management.doctor"}}
-          ],
-          "tree_view_fields": ["name", "age", "doctor_id"],
-          "form_view_fields": ["name", "age", "doctor_id"]
-        }},
-        {{
-          "name": "hospital_management.doctor",
-          "description": "Doctor Records",
-          "rec_name": "name",
-          "fields": [
-            {{"name": "name", "type": "char", "label": "Doctor Name", "required": true}},
-            {{"name": "specialty", "type": "char", "label": "Specialty"}}
-          ],
-          "tree_view_fields": ["name", "specialty"],
-          "form_view_fields": ["name", "specialty"]
-        }}
-      ],
-      "actions": [
-        {{
-          "name": "Patients",
-          "res_model": "hospital_management.patient",
-          "view_mode": "tree,form",
-          "help_text": "Manage hospital patients"
-        }},
-        {{
-          "name": "Doctors",
-          "res_model": "hospital_management.doctor",
-          "view_mode": "tree,form",
-          "help_text": "Manage hospital doctors"
-        }}
-      ],
-      "menus": [
-        {{
-          "name": "Hospital Management",
-          "sequence": 10
-        }},
-        {{
-          "name": "Patients",
-          "parent_xml_id": "hospital_management.menu_hospital_management_menu",
-          "action_xml_id": "hospital_management.patients_action",
-          "sequence": 10
-        }},
-        {{
-          "name": "Doctors",
-          "parent_xml_id": "hospital_management.menu_hospital_management_menu",
-          "action_xml_id": "hospital_management.doctors_action",
-          "sequence": 20
+            {{"name": "x_nickname", "type": "char", "label": "Nickname"}}
+          ]
         }}
       ]
     }}

@@ -2,11 +2,19 @@
 from odoo import models, fields
 
 class {{ class_name }}(models.Model):
+{% if is_inherit %}
+    _inherit = '{{ inherit_model }}'
+{% if not is_customization %}
     _name = '{{ model_name }}'
+{% endif %}
+{% else %}
+    _name = '{{ model_name }}'
+{% endif %}
     _description = '{{ model_description | default("") }}'
 {% if rec_name %}
     _rec_name = '{{ rec_name }}'
 {% endif %}
+
 {% for field in fields %}
 {% if field.type == 'many2one' %}
     {{ field.name }} = fields.Many2one(
