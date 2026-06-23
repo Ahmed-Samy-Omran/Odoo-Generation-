@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="library_management_menu"
+                  name="Library Management"
+                  sequence="10"/>
+        <menuitem id="books_menu"
+                  name="Books"
+                  parent="library_management_menu"
+                  action="books_action"
+                  sequence="10"/>
+    </data>
+</odoo>

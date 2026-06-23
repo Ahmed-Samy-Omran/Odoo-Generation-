@@ -8,6 +8,7 @@
                 <tree>
                     <field name="name"/>
                     <field name="join_date"/>
+                    <field name="plan"/>
                     <field name="trainer_id"/>
                 </tree>
             </field>
@@ -23,6 +24,7 @@
                         <group>
                             <field name="name"/>
                             <field name="join_date"/>
+                            <field name="plan"/>
                             <field name="trainer_id"/>
                         </group>
                     </sheet>

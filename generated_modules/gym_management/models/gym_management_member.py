@@ -13,6 +13,10 @@ class GymManagementMember(models.Model):
     join_date = fields.Date(
         string='Join Date',
     )
+    plan = fields.Selection(
+        selection=[['monthly', 'Monthly'], ['yearly', 'Yearly']],
+        string='Plan',
+    )
     trainer_id = fields.Many2one(
         comodel_name='gym_management.trainer',
         string='Trainer',
