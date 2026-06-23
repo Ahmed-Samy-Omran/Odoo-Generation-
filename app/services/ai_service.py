@@ -96,7 +96,10 @@
 import os
 import json
 import logging
-from openai import OpenAI
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
+from openai import OpenAI, APIError
 from dotenv import load_dotenv
 from app.models.schemas import GeneratorPayload, ModuleConfig
 
@@ -107,29 +110,81 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class ProviderTestResult:
+    name: str
+    model: str
+    url: str
+    key_status: str
+    success: bool
+    module_name: Optional[str] = None
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    http_status: Optional[int] = None
+    response_preview: Optional[str] = None
+
+
 class AIService:
     def __init__(self):
-        # Configure providers with correct OpenAI-compatible base URLs and models
-        self.providers = [
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+        openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
+        bynara_url = os.getenv("BYNARA_URL", "https://router.bynara.id/v1")
+        bynara_key = os.getenv("BYNARA_KEY", "").strip()
+        bynara_models = [
+            model.strip()
+            for model in os.getenv(
+                "BYNARA_MODELS",
+                "claude-sonnet-4.5,mistral-large,claude-haiku-4.5",
+            ).split(",")
+            if model.strip()
+        ] or [os.getenv("BYNARA_MODEL", "claude-sonnet-4.5")]
+
+        nara_providers = [
             {
-                "name": "OpenRouter",
-                "key": os.getenv("OPENROUTER_KEY", "").strip(),
-                "url": "https://openrouter.ai/api/v1",
-                "model": "google/gemini-2.0-flash-001"
-            },
-            {
-                "name": "Bynara",
-                "key": os.getenv("BYNARA_KEY", "").strip(),
-                "url": "https://router.bynara.id/v1",
-                "model": "gemini-1.5-flash"
-            },
-            {
-                "name": "Gemini_Direct",
-                "key": os.getenv("GEMINI_API_KEY", "").strip(),
-                "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-                "model": "gemini-2.0-flash"
+                "name": f"NaraRouter/{model}",
+                "key": bynara_key,
+                "url": bynara_url,
+                "model": model,
             }
+            for model in bynara_models
         ]
+
+        provider_groups = {
+            "nara": nara_providers,
+            "gemini": [
+                {
+                    "name": "Gemini_Direct",
+                    "key": os.getenv("GEMINI_API_KEY", "").strip(),
+                    "url": "https://generativelanguage.googleapis.com/v1beta/openai/",
+                    "model": gemini_model,
+                }
+            ],
+            "openrouter": [
+                {
+                    "name": "OpenRouter",
+                    "key": os.getenv("OPENROUTER_KEY", "").strip(),
+                    "url": "https://openrouter.ai/api/v1",
+                    "model": openrouter_model,
+                }
+            ],
+        }
+
+        # Nara models first (best -> lighter), then Gemini backup, then OpenRouter
+        default_order = ("nara", "gemini", "openrouter")
+        configured_order = os.getenv("AI_PROVIDER_ORDER", ",".join(default_order))
+        order = [name.strip().lower() for name in configured_order.split(",") if name.strip()]
+
+        self.providers = []
+        for name in order:
+            group = provider_groups.get(name)
+            if group:
+                self.providers.extend(group)
+            else:
+                logger.warning(f"Unknown provider in AI_PROVIDER_ORDER: {name}")
+
+        for fallback_name in default_order:
+            if fallback_name not in order:
+                self.providers.extend(provider_groups.get(fallback_name, []))
 
         # Log detected keys
         for p in self.providers:
@@ -143,6 +198,75 @@ class AIService:
             base_url += '/'
         return OpenAI(api_key=provider["key"], base_url=base_url)
 
+    def _call_provider(self, provider: Dict[str, Any], prompt: str) -> str:
+        client = self._get_client(provider)
+        response = client.chat.completions.create(
+            model=provider["model"],
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a senior Odoo developer. Return one complete JSON object only. "
+                        "No markdown, no comments, no placeholders like '...', and no truncated output."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=8192,
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Gateway returned empty content.")
+        return content
+
+    def test_provider(self, provider: Dict[str, Any], user_prompt: str) -> ProviderTestResult:
+        """Test a single gateway and return a detailed result."""
+        result = ProviderTestResult(
+            name=provider["name"],
+            model=provider["model"],
+            url=provider["url"],
+            key_status="FOUND" if provider["key"] else "MISSING",
+            success=False,
+        )
+
+        if not provider["key"]:
+            result.error_type = "MISSING_KEY"
+            result.error_message = "API key missing in .env"
+            return result
+
+        prompt = self._build_prompt(user_prompt)
+        try:
+            content = self._call_provider(provider, prompt)
+            try:
+                payload = self._parse_response(content)
+            except ValueError as e:
+                result.error_type = "PARSE_ERROR"
+                result.error_message = str(e)
+                result.response_preview = content[:300]
+                return result
+
+            result.success = True
+            result.module_name = payload.modules[0].module_name if payload.modules else None
+            return result
+        except APIError as e:
+            result.error_type = "API_ERROR"
+            result.http_status = getattr(e, "status_code", None)
+            result.error_message = str(e.body) if getattr(e, "body", None) else str(e)
+            return result
+        except ValueError as e:
+            result.error_type = "VALIDATION_ERROR"
+            result.error_message = str(e)
+            return result
+        except Exception as e:
+            result.error_type = type(e).__name__
+            result.error_message = str(e)
+            return result
+
+    def test_all_providers(self, user_prompt: str) -> List[ProviderTestResult]:
+        """Test every configured gateway independently."""
+        return [self.test_provider(provider, user_prompt) for provider in self.providers]
+
     def analyze_requirements(self, user_prompt: str) -> GeneratorPayload:
         prompt = self._build_prompt(user_prompt)
 
@@ -152,52 +276,94 @@ class AIService:
 
             try:
                 logger.info(f"Attempting to use gateway: {provider['name']}")
-                client = self._get_client(provider)
-
-                # Use a standard chat completion call
-                response = client.chat.completions.create(
-                    model=provider["model"],
-                    messages=[{"role": "user", "content": prompt}],
-                    response_format={"type": "json_object"}
-                )
-
-                content = response.choices[0].message.content
-                if not content:
-                    logger.error(f"Gateway {provider['name']} returned empty content.")
-                    continue
-
+                content = self._call_provider(provider, prompt)
                 return self._parse_response(content)
 
             except Exception as e:
                 logger.error(f"Gateway {provider['name']} failed: {str(e)}")
-                # If we get a 429 (Rate Limit) on Gemini, we might want to wait or just move to next
                 continue
 
         raise Exception("Fatal Error: All AI gateways failed. Please check your keys, quotas, and internet connection.")
 
     def _build_prompt(self, user_prompt: str) -> str:
-        """Standardized system prompt with schema."""
-        return f"""Act as a senior Odoo developer. Your task is to generate a JSON configuration based on the provided schema. 
-Your output must be purely valid JSON.
+        """Standardized prompt with schema and a concrete example."""
+        return f"""Generate a complete Odoo module JSON configuration.
 
-### SYSTEM CAPABILITIES & RULES:
-1. MULTI-MODULE: The root of the JSON MUST be an object with a single key, "modules", which is a list of module configurations.
-2. INHERITANCE: If customizing, set "is_customization": true and "inherit_model".
-3. COMPUTE FIELDS: Use standard Odoo 17 @api.depends syntax in "compute_code".
+Rules:
+1. Root object MUST contain key "modules" with a list of module configs.
+2. Use lowercase module names with underscores.
+3. Model technical names must be module_name.model_name.
+4. Return fully expanded JSON only. Never use "..." or omit sections.
 
-### SCHEMA:
+Example output shape:
+{{
+  "modules": [
+    {{
+      "module_name": "library",
+      "module_description": "Library management",
+      "models": [
+        {{
+          "name": "library.book",
+          "description": "Book",
+          "rec_name": "name",
+          "fields": [
+            {{"name": "name", "type": "char", "label": "Title", "required": true}},
+            {{"name": "isbn", "type": "char", "label": "ISBN"}}
+          ],
+          "tree_view_fields": ["name", "isbn"],
+          "form_view_fields": ["name", "isbn"]
+        }}
+      ],
+      "actions": [
+        {{
+          "name": "Books",
+          "res_model": "library.book",
+          "view_mode": "tree,form",
+          "help_text": "Manage books"
+        }}
+      ],
+      "menus": [
+        {{"name": "Library", "sequence": 10}},
+        {{
+          "name": "Books",
+          "parent_xml_id": "library.menu_library",
+          "action_xml_id": "library.books_action",
+          "sequence": 10
+        }}
+      ]
+    }}
+  ]
+}}
+
+Schema reference:
 {GeneratorPayload.model_json_schema()}
 
-### USER REQUEST:
+User request:
 {user_prompt}
-
-Generate the JSON configuration now. Ensure it is valid JSON and follows the schema strictly.
 """
+
+    @staticmethod
+    def _extract_json(response_text: str) -> str:
+        text = response_text.strip()
+        if text.startswith("```"):
+            lines = text.splitlines()
+            if lines and lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            text = "\n".join(lines).strip()
+
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end != -1 and end > start:
+            return text[start:end + 1]
+        return text
 
     def _parse_response(self, response_text: str) -> GeneratorPayload:
         """Validates AI response against the schema."""
+        cleaned = self._extract_json(response_text)
         try:
-            data = json.loads(response_text)
+            data = json.loads(cleaned)
             # Handle cases where AI might skip the 'modules' wrapper
             if isinstance(data, dict) and "module_name" in data and "modules" not in data:
                 return GeneratorPayload(modules=[ModuleConfig(**data)])
@@ -205,6 +371,9 @@ Generate the JSON configuration now. Ensure it is valid JSON and follows the sch
                 return GeneratorPayload(modules=[ModuleConfig(**m) for m in data])
 
             return GeneratorPayload(**data)
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse JSON: {cleaned[:300]}...")
+            raise ValueError(f"AI response was not valid JSON: {e}")
         except Exception as e:
-            logger.error(f"Failed to parse JSON: {response_text[:200]}...")
-            raise ValueError(f"AI response did not match schema: {str(e)}")
+            logger.error(f"Failed to validate schema: {cleaned[:300]}...")
+            raise ValueError(f"AI response did not match schema: {e}")
