@@ -3,7 +3,7 @@
     'name': 'gym_management',
     'version': '1.0',
     'category': 'Tools',
-    'summary': 'Module for managing gym trainers and members',
+    'summary': 'Gym Management System',
     'author': 'Generated Module',
     'depends': ['base'],
     'data': [

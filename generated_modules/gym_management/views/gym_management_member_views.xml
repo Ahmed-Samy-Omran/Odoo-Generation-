@@ -1,7 +1,7 @@
 <odoo>
     <data>
-        <!-- Tree View for Gym Member Records -->
-        <record id="gym_management_member_tree_view" model="ir.ui.view">
+        <!-- Tree View for Gym Member -->
+        <record id="gym_management.gym_management_member_tree_view" model="ir.ui.view">
             <field name="name">gym_management.member.tree</field>
             <field name="model">gym_management.member</field>
             <field name="arch" type="xml">
@@ -13,8 +13,8 @@
             </field>
         </record>
 
-        <!-- Form View for Gym Member Records -->
-        <record id="gym_management_member_form_view" model="ir.ui.view">
+        <!-- Form View for Gym Member -->
+        <record id="gym_management.gym_management_member_form_view" model="ir.ui.view">
             <field name="name">gym_management.member.form</field>
             <field name="model">gym_management.member</field>
             <field name="arch" type="xml">
@@ -30,6 +30,9 @@
             </field>
         </record>
 
-        <!-- Search View for Gym Member Records -->
+
+
+
+
     </data>
 </odoo>

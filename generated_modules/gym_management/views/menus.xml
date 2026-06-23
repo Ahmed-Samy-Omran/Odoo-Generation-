@@ -1,13 +1,17 @@
 <odoo>
     <data>
-        <menuitem id="gym management_menu"
-                  name="Gym Management"
+        <menuitem id="gym_menu"
+                  name="Gym"
                   sequence="10"/>
         <menuitem id="trainers_menu"
                   name="Trainers"
-parent="gym_management.menu_gym_management_root"action="gym_management.action_trainers"                  sequence="10"/>
+                  parent="gym_menu"
+                  action="trainers_action"
+                  sequence="10"/>
         <menuitem id="members_menu"
                   name="Members"
-parent="gym_management.menu_gym_management_root"action="gym_management.action_members"                  sequence="20"/>
+                  parent="gym_menu"
+                  action="members_action"
+                  sequence="20"/>
     </data>
 </odoo>

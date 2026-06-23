@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <record id="tasks_action" model="ir.actions.act_window">
+            <field name="name">Tasks</field>
+            <field name="res_model">project_task_management.task</field>
+            <field name="view_mode">tree,form,kanban,calendar</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage project tasks with time tracking</p>
+            </field>
+        </record>
+    </data>
+</odoo>

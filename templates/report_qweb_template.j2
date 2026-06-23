@@ -16,7 +16,7 @@
                             <tbody>
                                 {% for field_name in fields %}
                                 <tr>
-                                    <td>{{ field_name | replace("_", " ").title() }}</td>
+                                    <td>{{ field_name | replace("_", " ") | title }}</td>
                                     <td><span t-field="o.{{ field_name }}"/></td>
                                 </tr>
                                 {% endfor %}
