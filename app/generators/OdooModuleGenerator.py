@@ -357,34 +357,6 @@ class OdooModuleGenerator:
                 for report in model["print_reports"]:
                     report_name_snake = report["report_name"].replace(".", "_")
 
-                    # Generate report XML definition
-                    report_xml_content = report_xml_template.render(
-                        module_name=config.get("module_name"),
-                        report_name=report["report_name"],
-                        report_label=report["report_label"],
-                        report_type=report["report_type"],
-                        model_name=model["name"],
-                        report_name_snake=report_name_snake
-                    )
-                    report_xml_file = os.path.join(reports_dir, f"{report_name_snake}_report.xml")
-                    with open(report_xml_file, "w", encoding="utf-8") as f:
-                        f.write(report_xml_content)
-
-                    # Generate QWeb report template
-
-    def _generate_reports(self, config: Dict[str, Any], module_path: str) -> None:
-        """Generate QWeb report XML files and templates"""
-        reports_dir = os.path.join(module_path, "reports")
-        Path(reports_dir).mkdir(parents=True, exist_ok=True)
-
-        report_xml_template = self.env.get_template("report_xml_template.j2")
-        report_qweb_template = self.env.get_template("report_qweb_template.j2")
-
-        for model in config.get("models", []):
-            if model.get("print_reports"):
-                for report in model["print_reports"]:
-                    report_name_snake = report["report_name"].replace(".", "_")
-
                     # 1. Generate report XML definition (The Link between Report and Model)
                     report_xml_content = report_xml_template.render(
                         module_name=config.get("module_name"),
@@ -409,3 +381,20 @@ class OdooModuleGenerator:
                     report_qweb_file = os.path.join(reports_dir, f"{report_name_snake}_template.xml")
                     with open(report_qweb_file, "w", encoding="utf-8") as f:
                         f.write(report_qweb_content)
+
+    def _generate_init_files(self, config: Dict[str, Any], module_path: str) -> None:
+        """Generate __init__.py files for module and models package."""
+        init_template = self.env.get_template("init_template.j2")
+        models_init_template = self.env.get_template("models_init_template.j2")
+
+        module_init = init_template.render()
+        with open(os.path.join(module_path, "__init__.py"), "w", encoding="utf-8") as f:
+            f.write(module_init)
+
+        model_files = [
+            model.get("name", "model").replace(".", "_")
+            for model in config.get("models", [])
+        ]
+        models_init = models_init_template.render(model_files=model_files)
+        with open(os.path.join(module_path, "models", "__init__.py"), "w", encoding="utf-8") as f:
+            f.write(models_init)
