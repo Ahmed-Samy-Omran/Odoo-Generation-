@@ -1,0 +1,44 @@
+<odoo>
+    <data>
+        <!-- Tree View for Test Model -->
+        <record id="my_test_module.test_model_tree_view" model="ir.ui.view">
+            <field name="name">test.model.tree</field>
+            <field name="model">test.model</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Test Model -->
+        <record id="my_test_module.test_model_form_view" model="ir.ui.view">
+            <field name="name">test.model.form</field>
+            <field name="model">test.model</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for Test Model -->
+        <record id="my_test_module.test_model_search_view" model="ir.ui.view">
+            <field name="name">test.model.search</field>
+            <field name="model">test.model</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                </search>
+            </field>
+        </record>
+
+
+
+
+    </data>
+</odoo>

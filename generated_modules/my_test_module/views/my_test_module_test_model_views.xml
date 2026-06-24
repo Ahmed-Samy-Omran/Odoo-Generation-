@@ -1,0 +1,49 @@
+<odoo>
+    <data>
+        <!-- Tree View for Test Model -->
+        <record id="my_test_module.my_test_module_test_model_tree_view" model="ir.ui.view">
+            <field name="name">my_test_module.test_model.tree</field>
+            <field name="model">my_test_module.test_model</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Test Model -->
+        <record id="my_test_module.my_test_module_test_model_form_view" model="ir.ui.view">
+            <field name="name">my_test_module.test_model.form</field>
+            <field name="model">my_test_module.test_model</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for Test Model -->
+        <record id="my_test_module.my_test_module_test_model_search_view" model="ir.ui.view">
+            <field name="name">my_test_module.test_model.search</field>
+            <field name="model">my_test_module.test_model</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                    <separator/>
+                    <filter name="filter_name" string="Name" domain="[('name', '!=', False)]"/>
+                    <group expand="0" string="Group By">
+                        <filter name="group_by_name" string="Name" context="{'group_by': 'group_by_name'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+
+
+
+    </data>
+</odoo>

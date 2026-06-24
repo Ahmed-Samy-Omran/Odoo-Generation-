@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <record id="test_models_action" model="ir.actions.act_window">
+            <field name="name">Test Models</field>
+            <field name="res_model">my_test_module.test_model</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage test models</p>
+            </field>
+        </record>
+    </data>
+</odoo>
