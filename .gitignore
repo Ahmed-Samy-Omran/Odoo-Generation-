@@ -3,7 +3,3 @@
 .env.local
 __pycache__/
 *.py[cod]
-
-# AI-generated Odoo modules (runtime output)
-generated_modules/
-generated_modules_test/

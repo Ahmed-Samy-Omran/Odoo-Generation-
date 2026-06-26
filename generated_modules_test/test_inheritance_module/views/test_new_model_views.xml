@@ -1,0 +1,30 @@
+<odoo>
+    <data>
+        <!-- Tree View for New Model -->
+        <record id="test_new_model_tree_view" model="ir.ui.view">
+            <field name="name">test.new.model.tree</field>
+            <field name="model">test.new.model</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for New Model -->
+        <record id="test_new_model_form_view" model="ir.ui.view">
+            <field name="name">test.new.model.form</field>
+            <field name="model">test.new.model</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>

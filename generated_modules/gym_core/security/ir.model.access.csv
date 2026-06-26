@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_gym_core_membership_type_user,Defines different types of gym memberships. Access,model_gym_core_membership_type,base.group_user,1,1,1,1
+access_gym_core_trainer_user,Manages gym trainers. Access,model_gym_core_trainer,base.group_user,1,1,1,1
+access_gym_core_member_user,Manages gym members. Access,model_gym_core_member,base.group_user,1,1,1,1

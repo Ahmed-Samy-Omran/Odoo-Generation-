@@ -1,0 +1,57 @@
+<odoo>
+    <data>
+        <!-- Tree View for Property -->
+        <record id="real_estate.real_estate_property_tree_view" model="ir.ui.view">
+            <field name="name">real_estate.property.tree</field>
+            <field name="model">real_estate.property</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="price"/>
+                    <field name="status"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Property -->
+        <record id="real_estate.real_estate_property_form_view" model="ir.ui.view">
+            <field name="name">real_estate.property.form</field>
+            <field name="model">real_estate.property</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="price"/>
+                            <field name="status"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for Property -->
+        <record id="real_estate.real_estate_property_search_view" model="ir.ui.view">
+            <field name="name">real_estate.property.search</field>
+            <field name="model">real_estate.property</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                    <field name="price"/>
+                    <field name="status"/>
+                    <separator/>
+                    <filter name="available_properties" string="Available Properties" domain="[('status', '=', 'available')]"/>
+                    <filter name="sold_properties" string="Sold Properties" domain="[('status', '=', 'sold')]"/>
+                    <filter name="reserved_properties" string="Reserved Properties" domain="[('status', '=', 'reserved')]"/>
+                    <group expand="0" string="Group By">
+                        <filter name="status_group" string="Status" context="{'group_by': 'status_group'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+
+
+
+    </data>
+</odoo>

@@ -1,0 +1,54 @@
+<odoo>
+    <data>
+        <!-- Tree View for Patient Appointments -->
+        <record id="hospital_appointment_tree_view" model="ir.ui.view">
+            <field name="name">hospital.appointment.tree</field>
+            <field name="model">hospital.appointment</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="patient_id"/>
+                    <field name="doctor_id"/>
+                    <field name="appointment_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Patient Appointments -->
+        <record id="hospital_appointment_form_view" model="ir.ui.view">
+            <field name="name">hospital.appointment.form</field>
+            <field name="model">hospital.appointment</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="patient_id"/>
+                            <field name="doctor_id"/>
+                            <field name="appointment_date"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for Patient Appointments -->
+        <record id="hospital_appointment_search_view" model="ir.ui.view">
+            <field name="name">hospital.appointment.search</field>
+            <field name="model">hospital.appointment</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="name"/>
+                    <field name="patient_id"/>
+                    <field name="doctor_id"/>
+                    <separator/>
+                    <filter name="today_appointments" string="Today's Appointments" domain="[('appointment_date', '>=', context_today().strftime('%Y-%m-%d 00:00:00')), ('appointment_date', '<=', context_today().strftime('%Y-%m-%d 23:59:59'))]"/>
+                    <group expand="0" string="Group By">
+                        <filter name="doctor_id" string="Doctor" context="{\'group_by\': \'doctor_id\'}"/>
+                        <filter name="appointment_date" string="Appointment Date" context="{\'group_by\': \'appointment_date\'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+    </data>
+</odoo>

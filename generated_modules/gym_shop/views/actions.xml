@@ -1,0 +1,20 @@
+<odoo>
+    <data>
+        <record id="products_action" model="ir.actions.act_window">
+            <field name="name">Products</field>
+            <field name="res_model">gym_shop.product</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage products available in the gym shop</p>
+            </field>
+        </record>
+        <record id="sales_action" model="ir.actions.act_window">
+            <field name="name">Sales</field>
+            <field name="res_model">gym_shop.sale_order</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym shop sales orders</p>
+            </field>
+        </record>
+    </data>
+</odoo>

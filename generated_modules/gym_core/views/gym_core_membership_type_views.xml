@@ -1,0 +1,33 @@
+<odoo>
+    <data>
+        <!-- Tree View for Defines different types of gym memberships. -->
+        <record id="gym_core_membership_type_tree_view" model="ir.ui.view">
+            <field name="name">gym_core.membership_type.tree</field>
+            <field name="model">gym_core.membership_type</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="price"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Defines different types of gym memberships. -->
+        <record id="gym_core_membership_type_form_view" model="ir.ui.view">
+            <field name="name">gym_core.membership_type.form</field>
+            <field name="model">gym_core.membership_type</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="description"/>
+                            <field name="price"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+    </data>
+</odoo>
