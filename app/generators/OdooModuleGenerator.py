@@ -90,7 +90,7 @@ class OdooModuleGenerator:
             return name.lower().replace(".", "_").replace(" ", "_")
 
         menu_id_map = {}
-        for menu in config.get("menus", []):
+        for menu in config.get("menus") or []:
             name = menu.get("name", "")
             if not name:
                 continue
@@ -102,7 +102,7 @@ class OdooModuleGenerator:
                 menu_id_map[ref] = gen_id
 
         action_id_map = {}
-        for action in config.get("actions", []):
+        for action in config.get("actions") or []:
             name = action.get("name", "")
             if not name:
                 continue
@@ -113,7 +113,7 @@ class OdooModuleGenerator:
                 action_id_map[ref] = gen_id
 
         # 3. Resolve parent_xml_id and action_xml_id references
-        for menu in config.get("menus", []):
+        for menu in config.get("menus") or []:
             # Resolve parent_xml_id
             parent = menu.get("parent_xml_id")
             if parent:
@@ -128,7 +128,7 @@ class OdooModuleGenerator:
                             menu["parent_xml_id"] = menu_id_map[ref_id]
                         else:
                             # Default to the first root menu if prefix matches but ID is not found
-                            root_menus = [m for m in config.get("menus", []) if not m.get("parent_xml_id")]
+                            root_menus = [m for m in (config.get("menus") or []) if not m.get("parent_xml_id")]
                             if root_menus:
                                 menu["parent_xml_id"] = f"{clean_name(root_menus[0]['name'])}_menu"
             # Resolve action_xml_id
@@ -314,7 +314,7 @@ class OdooModuleGenerator:
 
     def _generate_actions(self, config: Dict[str, Any], module_path: str) -> None:
         """Generate action XML files"""
-        actions = config.get("actions", [])
+        actions = config.get("actions") or []
         if not actions:
             return
 
@@ -330,7 +330,7 @@ class OdooModuleGenerator:
 
     def _generate_menus(self, config: Dict[str, Any], module_path: str) -> None:
         """Generate menu XML files"""
-        menus = config.get("menus", [])
+        menus = config.get("menus") or []
         if not menus:
             return
 
