@@ -1,7 +1,0 @@
-<odoo>
-    <data>
-        <menuitem id="string_menu"
-                  name="string"
-parent="string"action="string"                  sequence="10"/>
-    </data>
-</odoo>

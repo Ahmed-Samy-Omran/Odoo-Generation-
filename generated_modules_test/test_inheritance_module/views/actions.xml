@@ -1,9 +1,0 @@
-<odoo>
-    <data>
-        <record id="new_model_action_action" model="ir.actions.act_window">
-            <field name="name">New Model Action</field>
-            <field name="res_model">test.new.model</field>
-            <field name="view_mode">tree,form</field>
-        </record>
-    </data>
-</odoo>
