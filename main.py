@@ -6,7 +6,9 @@ import json
 import asyncio
 import logging
 import traceback
+import zipfile
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -25,6 +27,14 @@ app = FastAPI(
     title="Odoo AI Module Generator",
     description="API to generate Odoo modules from JSON configuration",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -433,6 +443,46 @@ async def download_result(job_id: str):
         filename=zip_name,
         media_type="application/x-zip-compressed"
     )
+
+
+@app.get(
+    "/job/{job_id}/files",
+    summary="List generated files for a completed job",
+    description="Returns the list of generated files for completed local_zip jobs.",
+)
+async def get_job_files(job_id: str):
+    if job_id not in jobs:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    j = jobs[job_id]
+    if j["status"] != "done":
+        raise HTTPException(
+            status_code=409,
+            detail=f"Job is not done yet (status={j['status']})"
+        )
+    if j.get("github_url"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"This job was deployed to GitHub: {j['github_url']}"
+        )
+
+    zip_path = j.get("_zip_path")
+    if not zip_path or not os.path.exists(zip_path):
+        raise HTTPException(status_code=404, detail="ZIP file not found on server")
+
+    try:
+        files = []
+        with zipfile.ZipFile(zip_path, "r") as zipf:
+            for info in zipf.infolist():
+                if not info.is_dir():
+                    files.append({
+                        "path": info.filename,
+                        "name": os.path.basename(info.filename),
+                        "content": zipf.read(info.filename).decode("utf-8", errors="replace"),
+                    })
+        return {"files": files}
+    except zipfile.BadZipFile:
+        raise HTTPException(status_code=500, detail="Failed to read ZIP archive")
 
 
 if __name__ == "__main__":
