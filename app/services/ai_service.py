@@ -206,8 +206,9 @@ class AIService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a senior Odoo developer. Return one complete JSON object only. "
-                        "No markdown, no comments, no placeholders like '...', and no truncated output."
+                        "You are a senior Odoo developer. Carefully analyze the request, then generate only valid JSON conforming to the module schema. "
+                        "Do not include markdown, comments, or any text outside the JSON. "
+                        "If GitHub deployment is requested, set git_deploy_target to 'github'; otherwise use 'local_zip'."
                     ),
                 },
                 {"role": "user", "content": prompt},
@@ -287,7 +288,15 @@ class AIService:
 
     def _build_prompt(self, user_prompt: str) -> str:
         """Standardized prompt with schema and a concrete example."""
-        return f"""Generate a complete Odoo module JSON configuration.
+        return f"""Analyze the user request in two steps.
+1. First, build a concise plan for the module, including models, views, menus, security groups and deployment target.
+2. Then output only the final JSON payload that matches the GeneratorPayload schema.
+
+Important:
+- Do not include markdown, comments, or any explanation outside the JSON.
+- If GitHub deployment is requested, set "git_deploy_target": "github".
+- Otherwise set "git_deploy_target": "local_zip".
+- Always return valid JSON parseable by json.loads().
 
 Rules:
 1. Root object MUST contain key "modules" with a list of module configs.

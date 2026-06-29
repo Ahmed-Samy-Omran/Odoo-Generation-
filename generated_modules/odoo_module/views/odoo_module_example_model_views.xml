@@ -1,0 +1,36 @@
+<odoo>
+    <data>
+        <!-- Tree View for Example Model for Odoo Module -->
+        <record id="odoo_module.odoo_module_example_model_tree_view" model="ir.ui.view">
+            <field name="name">odoo_module.example_model.tree</field>
+            <field name="model">odoo_module.example_model</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="description"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Example Model for Odoo Module -->
+        <record id="odoo_module.odoo_module_example_model_form_view" model="ir.ui.view">
+            <field name="name">odoo_module.example_model.form</field>
+            <field name="model">odoo_module.example_model</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="description"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

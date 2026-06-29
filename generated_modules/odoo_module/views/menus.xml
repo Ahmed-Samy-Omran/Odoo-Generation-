@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="odoo_module_menu"
+                  name="Odoo Module"
+                  sequence="10"/>
+        <menuitem id="example_models_menu"
+                  name="Example Models"
+                  parent="odoo_module_menu"
+                  action="example_models_action"
+                  sequence="10"/>
+    </data>
+</odoo>

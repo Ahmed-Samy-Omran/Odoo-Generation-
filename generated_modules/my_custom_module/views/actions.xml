@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <record id="my_custom_models_action" model="ir.actions.act_window">
+            <field name="name">My Custom Models</field>
+            <field name="res_model">my_custom_module.my_model</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage your custom module records</p>
+            </field>
+        </record>
+    </data>
+</odoo>
