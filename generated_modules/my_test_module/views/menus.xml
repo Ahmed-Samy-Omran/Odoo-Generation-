@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="test_module_menu"
+                  name="Test Module"
+                  sequence="10"/>
+        <menuitem id="test_models_menu"
+                  name="Test Models"
+                  parent="test_module_menu"
+                  action="test_models_action"
+                  sequence="10"/>
+    </data>
+</odoo>

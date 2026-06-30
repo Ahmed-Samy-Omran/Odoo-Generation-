@@ -16,6 +16,7 @@ from app.models.schemas import GeneratorPayload, ChatMessage, ChatRequest, ChatR
 from app.generators.OdooModuleGenerator import OdooModuleGenerator
 from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
+from app.services.git_deploy_service import GitDeployService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -128,6 +129,15 @@ def _collect_files_from_paths(module_paths: list) -> list:
     return sorted(files, key=lambda x: x["path"])
 
 
+def _deploy_to_github(module_paths: list) -> list[str]:
+    git_service = GitDeployService()
+    urls = []
+    for module_path in module_paths:
+        url = git_service.deploy(module_path)
+        urls.append(url)
+    return urls
+
+
 async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int = 10):
     generator = OdooModuleGenerator(templates_dir=TEMPLATES_DIR)
     module_paths = []
@@ -148,25 +158,19 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
     jobs[job_id]["_module_paths"] = module_paths
 
     if deploy_target == "github":
-        _update_job(job_id, progress=88, message="Pushing to GitHub...")
+        _update_job(job_id, progress=88, message="Pushing to GitHub... (this may take a moment)")
         await asyncio.sleep(0)
         try:
-            from app.services.git_deploy_service import GitDeployService
-
-            git_service = GitDeployService()
-            urls = []
-            for module_path in module_paths:
-                url = await asyncio.to_thread(git_service.deploy, module_path)
-                urls.append(url)
+            github_urls = await asyncio.to_thread(_deploy_to_github, module_paths)
             _update_job(
                 job_id,
                 status="done",
                 progress=100,
                 message="Done! Module(s) pushed to GitHub.",
-                github_url=", ".join(urls),
+                github_url=", ".join(github_urls),
             )
-        except ImportError:
-            _update_job(job_id, status="error", progress=0, error="GitHub deploy service is not available.")
+        except EnvironmentError as exc:
+            _update_job(job_id, status="error", progress=0, error=f"GitHub config error: {exc}")
         except Exception as exc:
             logger.exception("GitHub deploy failed for job %s", job_id)
             _update_job(job_id, status="error", progress=0, error=f"GitHub deploy failed: {exc}")
@@ -332,28 +336,65 @@ async def chat_requirements(request: ChatRequest):
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
-@app.post("/generate-module/", response_model=JobStatus)
+@app.post(
+    "/generate-module/",
+    response_model=JobStatus,
+    summary="Generate module from JSON config (async with progress)",
+    description=(
+        "Submit a module config. Returns a **job_id** immediately.\n\n"
+        "- Set `git_deploy_target: 'github'` in any module to push it to GitHub "
+        "(requires `GITHUB_TOKEN` + `GITHUB_USER` in `.env`).\n"
+        "- Set `git_deploy_target: 'local_zip'` (default) to download a ZIP.\n\n"
+        "Poll `/job/{job_id}` for progress. "
+        "Download from `/download/{job_id}` (local_zip) or check `github_url` (github)."
+    ),
+)
 async def generate_module(payload: GeneratorPayload):
     job_id = _new_job()
     asyncio.create_task(_run_generate_module_job(job_id, payload))
     return _job_status_response(job_id)
 
 
-@app.post("/analyze-requirements/", response_model=JobStatus)
+@app.post(
+    "/analyze-requirements/",
+    response_model=JobStatus,
+    summary="AI-analyze prompt and generate module (async with progress)",
+    description=(
+        "Submit a natural-language prompt. The AI decides the module structure.\n\n"
+        "Include phrases like **'push to github'** or **'deploy to github'** in your "
+        "prompt and the AI will set `git_deploy_target: 'github'` automatically.\n\n"
+        "Poll `/job/{job_id}` for progress and `estimated_remaining_sec`."
+    ),
+)
 async def analyze_requirements_and_generate(user_prompt: UserPrompt):
     job_id = _new_job()
     asyncio.create_task(_run_analyze_requirements_job(job_id, user_prompt.prompt))
     return _job_status_response(job_id)
 
 
-@app.get("/job/{job_id}", response_model=JobStatus)
+@app.get(
+    "/job/{job_id}",
+    response_model=JobStatus,
+    summary="Poll job status + remaining time",
+    description=(
+        "Returns **progress** (0-100 %), **elapsed_sec**, and **estimated_remaining_sec**.\n\n"
+        "Keep polling every 2-3 seconds until `status` is `done` or `error`.\n\n"
+        "When done:\n"
+        "- `download_url` is set if `git_deploy_target` was `local_zip`\n"
+        "- `github_url` is set if `git_deploy_target` was `github`"
+    ),
+)
 async def get_job_status(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     return _job_status_response(job_id)
 
 
-@app.get("/job/{job_id}/stream")
+@app.get(
+    "/job/{job_id}/stream",
+    summary="Stream job progress as Server-Sent Events",
+    description="SSE stream — pushes a JSON event every 2 seconds until done/error.",
+)
 async def stream_job_progress(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
@@ -369,7 +410,11 @@ async def stream_job_progress(job_id: str):
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-@app.get("/job/{job_id}/files")
+@app.get(
+    "/job/{job_id}/files",
+    summary="List generated files for a completed job",
+    description="Returns the list of generated files for completed jobs.",
+)
 async def get_job_files(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -382,7 +427,10 @@ async def get_job_files(job_id: str):
     return {"files": _collect_files_from_paths(module_paths)}
 
 
-@app.get("/download/{job_id}")
+@app.get(
+    "/download/{job_id}",
+    summary="Download the generated ZIP (local_zip jobs only)",
+)
 async def download_result(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail="Job not found")

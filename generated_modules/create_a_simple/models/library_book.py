@@ -1,0 +1,19 @@
+# -*- coding: utf-8 -*-
+from odoo import models, fields, api
+
+class LibraryBook(models.Model):
+    _name = 'library.book'
+    _description = 'Library Book'
+    _rec_name = 'name'
+
+    name = fields.Char(
+        string='Title',
+        required=True,
+    )
+    author = fields.Char(
+        string='Author',
+        required=True,
+    )
+    publication_date = fields.Date(
+        string='Publication Date',
+    )
