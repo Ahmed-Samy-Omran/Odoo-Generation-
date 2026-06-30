@@ -12,7 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from typing import Optional
 
-from app.models.schemas import GeneratorPayload
+from app.models.schemas import GeneratorPayload, ChatMessage, ChatRequest, ChatResponse
 from app.generators.OdooModuleGenerator import OdooModuleGenerator
 from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
@@ -313,6 +313,23 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.post("/chat/", response_model=ChatResponse)
+async def chat_requirements(request: ChatRequest):
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="At least one message is required")
+
+    last = request.messages[-1]
+    if last.role != "user":
+        raise HTTPException(status_code=400, detail="Last message must be from the user")
+
+    payload = [{"role": m.role, "content": m.content} for m in request.messages]
+    try:
+        return await asyncio.to_thread(ai_service.chat_requirements, payload)
+    except Exception as exc:
+        logger.exception("Chat failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
 
 
 @app.post("/generate-module/", response_model=JobStatus)

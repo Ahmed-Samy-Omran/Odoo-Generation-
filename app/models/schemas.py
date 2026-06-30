@@ -113,3 +113,18 @@ class ModuleConfig(BaseModel):
 
 class GeneratorPayload(BaseModel):
     modules: List[ModuleConfig]
+
+
+class ChatMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: List[ChatMessage]
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    ready_to_generate: bool = False
+    requirements_summary: str = ""

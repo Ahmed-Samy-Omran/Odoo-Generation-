@@ -1,0 +1,27 @@
+<odoo>
+    <data>
+        <menuitem id="gym_management_menu"
+                  name="Gym Management"
+                  sequence="10"/>
+        <menuitem id="members_menu"
+                  name="Members"
+                  parent="gym_management_menu"
+                  action="gym_members_action"
+                  sequence="10"/>
+        <menuitem id="membership_plans_menu"
+                  name="Membership Plans"
+                  parent="gym_management_menu"
+                  action="membership_plans_action"
+                  sequence="20"/>
+        <menuitem id="trainers_menu"
+                  name="Trainers"
+                  parent="gym_management_menu"
+                  action="gym_trainers_action"
+                  sequence="30"/>
+        <menuitem id="classes_menu"
+                  name="Classes"
+                  parent="gym_management_menu"
+                  action="gym_classes_action"
+                  sequence="40"/>
+    </data>
+</odoo>

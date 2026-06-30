@@ -1,0 +1,36 @@
+<odoo>
+    <data>
+        <record id="membership_plans_action" model="ir.actions.act_window">
+            <field name="name">Membership Plans</field>
+            <field name="res_model">odoo_module.membership_plan</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym membership plans</p>
+            </field>
+        </record>
+        <record id="gym_members_action" model="ir.actions.act_window">
+            <field name="name">Gym Members</field>
+            <field name="res_model">odoo_module.gym_member</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym members</p>
+            </field>
+        </record>
+        <record id="gym_trainers_action" model="ir.actions.act_window">
+            <field name="name">Gym Trainers</field>
+            <field name="res_model">odoo_module.gym_trainer</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym trainers</p>
+            </field>
+        </record>
+        <record id="gym_classes_action" model="ir.actions.act_window">
+            <field name="name">Gym Classes</field>
+            <field name="res_model">odoo_module.gym_class</field>
+            <field name="view_mode">tree,form,calendar</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage gym classes and schedules</p>
+            </field>
+        </record>
+    </data>
+</odoo>

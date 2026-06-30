@@ -101,7 +101,7 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI, APIError
 from dotenv import load_dotenv
-from app.models.schemas import GeneratorPayload, ModuleConfig
+from app.models.schemas import GeneratorPayload, ModuleConfig, ChatResponse
 
 # Load environment variables
 load_dotenv()
@@ -266,6 +266,66 @@ class AIService:
     def test_all_providers(self, user_prompt: str) -> List[ProviderTestResult]:
         """Test every configured gateway independently."""
         return [self.test_provider(provider, user_prompt) for provider in self.providers]
+
+    def chat_requirements(self, messages: List[Dict[str, str]]) -> ChatResponse:
+        """Gather module requirements via conversational Q&A before generation."""
+        for provider in self.providers:
+            if not provider["key"]:
+                continue
+
+            try:
+                logger.info(f"Chat via gateway: {provider['name']}")
+                content = self._call_provider_chat(provider, messages)
+                return self._parse_chat_response(content)
+            except Exception as e:
+                logger.error(f"Chat gateway {provider['name']} failed: {str(e)}")
+                continue
+
+        raise Exception("All AI gateways failed for chat. Please check your keys and connection.")
+
+    def _call_provider_chat(self, provider: Dict[str, Any], messages: List[Dict[str, str]]) -> str:
+        client = self._get_client(provider)
+        response = client.chat.completions.create(
+            model=provider["model"],
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an Odoo module requirements consultant. Gather enough detail before code generation.\n\n"
+                        "Rules:\n"
+                        "- Reply in the same language the user uses (Arabic or English).\n"
+                        "- Ask 1-3 focused clarifying questions when requirements are incomplete.\n"
+                        "- For casual replies (ok, thanks, ايك, تمام, yes), acknowledge briefly — do NOT treat them as module specs.\n"
+                        "- Set ready_to_generate to true ONLY when you clearly have: module purpose, main models/entities, "
+                        "key fields, and any special features (reports, workflows, security).\n"
+                        "- When ready_to_generate is true, fill requirements_summary with a complete English spec "
+                        "for the code generator, covering everything discussed.\n"
+                        "- Never say you are generating code; the user clicks Generate separately.\n\n"
+                        "Return JSON only:\n"
+                        '{"reply": "message to user", "ready_to_generate": false, "requirements_summary": ""}'
+                    ),
+                },
+                *messages,
+            ],
+            response_format={"type": "json_object"},
+            max_tokens=2048,
+        )
+        content = response.choices[0].message.content
+        if not content:
+            raise ValueError("Gateway returned empty chat content.")
+        return content
+
+    def _parse_chat_response(self, response_text: str) -> ChatResponse:
+        cleaned = self._extract_json(response_text)
+        try:
+            data = json.loads(cleaned)
+            return ChatResponse(
+                reply=str(data.get("reply", "")).strip() or "How can I help with your Odoo module?",
+                ready_to_generate=bool(data.get("ready_to_generate", False)),
+                requirements_summary=str(data.get("requirements_summary", "")).strip(),
+            )
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Chat response was not valid JSON: {e}")
 
     def analyze_requirements(self, user_prompt: str) -> GeneratorPayload:
         prompt = self._build_prompt(user_prompt)
