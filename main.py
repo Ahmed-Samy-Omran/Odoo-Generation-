@@ -62,6 +62,7 @@ class JobStatus(BaseModel):
     download_url: Optional[str] = None
     github_url: Optional[str] = None
     error: Optional[str] = None
+    schema_preview: Optional[dict] = None
 
 
 def _new_job() -> str:
@@ -87,6 +88,69 @@ def _update_job(job_id: str, **kwargs):
         jobs[job_id].update(kwargs)
 
 
+def _build_schema_preview(modules: list) -> dict:
+    """Build ERD + use-case preview data for frontend diagram animation."""
+    models_out = []
+    use_cases = []
+    actors = {"User", "Administrator"}
+
+    for module in modules:
+        module_name = module.get("module_name", "Module")
+        for model in module.get("models", []):
+            model_name = model.get("name", "")
+            fields = []
+            for field in model.get("fields", []):
+                fields.append({
+                    "name": field.get("name"),
+                    "type": field.get("type"),
+                    "required": bool(field.get("required", False)),
+                    "relation": field.get("relation"),
+                })
+            models_out.append({
+                "name": model_name,
+                "module_name": module_name,
+                "description": model.get("description", ""),
+                "fields": fields,
+            })
+            for action in ("Create", "View", "Edit"):
+                use_cases.append({
+                    "name": f"{action} {model_name}",
+                    "actor": "User",
+                    "model": model_name,
+                })
+            use_cases.append({
+                "name": f"Delete {model_name}",
+                "actor": "Administrator",
+                "model": model_name,
+            })
+
+        for group in module.get("security_groups") or []:
+            if group.get("name"):
+                actors.add(group["name"])
+
+        for menu in module.get("menus") or []:
+            if menu.get("name"):
+                use_cases.append({
+                    "name": menu["name"],
+                    "actor": "Administrator" if not menu.get("parent_xml_id") else "User",
+                })
+
+        for action in module.get("actions") or []:
+            if action.get("name"):
+                use_cases.append({
+                    "name": action["name"],
+                    "actor": "User",
+                    "model": action.get("res_model"),
+                })
+
+    return {
+        "module_name": modules[0].get("module_name", "Module") if modules else "Module",
+        "models": models_out,
+        "actors": sorted(actors),
+        "use_cases": use_cases,
+    }
+
+
 def _job_status_response(job_id: str) -> dict:
     j = jobs.get(job_id)
     if not j:
@@ -105,6 +169,7 @@ def _job_status_response(job_id: str) -> dict:
         "download_url": j["download_url"],
         "github_url": j["github_url"],
         "error": j["error"],
+        "schema_preview": j.get("schema_preview"),
     }
 
 
@@ -170,10 +235,12 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
                 github_url=", ".join(github_urls),
             )
         except EnvironmentError as exc:
-            _update_job(job_id, status="error", progress=0, error=f"GitHub config error: {exc}")
+            err = f"GitHub config error: {exc}"
+            _update_job(job_id, status="error", progress=0, message=err, error=err)
         except Exception as exc:
             logger.exception("GitHub deploy failed for job %s", job_id)
-            _update_job(job_id, status="error", progress=0, error=f"GitHub deploy failed: {exc}")
+            err = f"GitHub deploy failed: {exc}"
+            _update_job(job_id, status="error", progress=0, message=err, error=err)
         return
 
     _update_job(job_id, progress=92, message="Creating ZIP archive...")
@@ -188,7 +255,7 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
     await asyncio.to_thread(ZipHandler.create_batch_zip, module_paths, zip_path)
 
     if not os.path.exists(zip_path):
-        _update_job(job_id, status="error", error="Failed to create ZIP file")
+        _update_job(job_id, status="error", message="Failed to create ZIP file", error="Failed to create ZIP file")
         return
 
     jobs[job_id]["_zip_path"] = zip_path
@@ -216,13 +283,23 @@ async def _run_generate_module_job(job_id: str, payload: GeneratorPayload):
         payload_data = payload.model_dump()
         modules = payload_data.get("modules", [])
         if not modules:
-            _update_job(job_id, status="error", progress=0, error="No modules specified in configuration")
+            err = "No modules specified in configuration"
+            _update_job(job_id, status="error", progress=0, message=err, error=err)
             return
+
+        _update_job(
+            job_id,
+            progress=10,
+            message="Schema ready — generating files...",
+            schema_preview=_build_schema_preview(modules),
+        )
+        await asyncio.sleep(0)
 
         await _generate_and_deploy(job_id, modules, ai_done_progress=10)
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
-        _update_job(job_id, status="error", progress=0, error=str(exc))
+        err_msg = str(exc)
+        _update_job(job_id, status="error", progress=0, message=err_msg, error=err_msg)
 
 
 async def _run_analyze_requirements_job(job_id: str, user_prompt: str):
@@ -238,19 +315,26 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str):
 
         payload = await asyncio.to_thread(ai_service.analyze_requirements, user_prompt)
 
-        _update_job(job_id, progress=55, message="AI finished — generating files...")
-        await asyncio.sleep(0)
-
         payload_data = payload.model_dump()
         modules = payload_data.get("modules", [])
         if not modules:
-            _update_job(job_id, status="error", progress=0, error="No modules analyzed from the prompt")
+            err = "No modules analyzed from the prompt"
+            _update_job(job_id, status="error", progress=0, message=err, error=err)
             return
+
+        _update_job(
+            job_id,
+            progress=55,
+            message="AI finished — drawing system architecture...",
+            schema_preview=_build_schema_preview(modules),
+        )
+        await asyncio.sleep(0)
 
         await _generate_and_deploy(job_id, modules, ai_done_progress=55)
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
-        _update_job(job_id, status="error", progress=0, error=str(exc))
+        err_msg = str(exc)
+        _update_job(job_id, status="error", progress=0, message=err_msg, error=err_msg)
 
 
 @app.exception_handler(httpx.ConnectError)

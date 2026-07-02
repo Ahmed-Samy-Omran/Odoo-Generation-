@@ -1,0 +1,40 @@
+<odoo>
+    <data>
+        <!-- Tree View for Consultation/Visit -->
+        <record id="create_an_odoo_module.create_an_odoo_module_consultation_tree_view" model="ir.ui.view">
+            <field name="name">create_an_odoo_module.consultation.tree</field>
+            <field name="model">create_an_odoo_module.consultation</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="patient_id"/>
+                    <field name="doctor_id"/>
+                    <field name="consultation_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Consultation/Visit -->
+        <record id="create_an_odoo_module.create_an_odoo_module_consultation_form_view" model="ir.ui.view">
+            <field name="name">create_an_odoo_module.consultation.form</field>
+            <field name="model">create_an_odoo_module.consultation</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="patient_id"/>
+                            <field name="doctor_id"/>
+                            <field name="consultation_date"/>
+                            <field name="doctor_notes"/>
+                            <field name="diagnosis"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

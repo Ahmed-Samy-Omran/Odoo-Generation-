@@ -214,7 +214,7 @@ class AIService:
                 {"role": "user", "content": prompt},
             ],
             response_format={"type": "json_object"},
-            max_tokens=8192,
+            max_tokens=4096,
         )
         content = response.choices[0].message.content
         if not content:

@@ -1,0 +1,41 @@
+<odoo>
+    <data>
+        <!-- Tree View for Student -->
+        <record id="the_user_wants_an.the_user_wants_an_student_tree_view" model="ir.ui.view">
+            <field name="name">the_user_wants_an.student.tree</field>
+            <field name="model">the_user_wants_an.student</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="student_id"/>
+                    <field name="date_of_birth"/>
+                    <field name="class_id"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Student -->
+        <record id="the_user_wants_an.the_user_wants_an_student_form_view" model="ir.ui.view">
+            <field name="name">the_user_wants_an.student.form</field>
+            <field name="model">the_user_wants_an.student</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="student_id"/>
+                            <field name="date_of_birth"/>
+                            <field name="contact_info"/>
+                            <field name="class_id"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>
