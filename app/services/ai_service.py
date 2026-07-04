@@ -102,6 +102,7 @@ from typing import Any, Dict, List, Optional
 from openai import OpenAI, APIError
 from dotenv import load_dotenv
 from app.models.schemas import GeneratorPayload, ModuleConfig, ChatResponse
+from app.services.rag_service import RAGService
 
 # Load environment variables
 load_dotenv()
@@ -174,6 +175,7 @@ class AIService:
         configured_order = os.getenv("AI_PROVIDER_ORDER", ",".join(default_order))
         order = [name.strip().lower() for name in configured_order.split(",") if name.strip()]
 
+        self.rag_service = RAGService()
         self.providers = []
         for name in order:
             group = provider_groups.get(name)
@@ -348,6 +350,7 @@ class AIService:
 
     def _build_prompt(self, user_prompt: str) -> str:
         """Standardized prompt with schema and a concrete example."""
+        rag_context = self.rag_service._format_search_results(self.rag_service.search(user_prompt, top_k=3))
         return f"""Analyze the user request in two steps.
 1. First, build a concise plan for the module, including models, views, menus, security groups and deployment target.
 2. Then output only the final JSON payload that matches the GeneratorPayload schema.
@@ -357,6 +360,10 @@ Important:
 - If GitHub deployment is requested, set "git_deploy_target": "github".
 - Otherwise set "git_deploy_target": "local_zip".
 - Always return valid JSON parseable by json.loads().
+- Prioritize the provided local Odoo reference context when the request concerns standard Odoo behavior, views, models, or XML structure.
+
+Reference Context:
+{rag_context}
 
 Rules:
 1. Root object MUST contain key "modules" with a list of module configs.

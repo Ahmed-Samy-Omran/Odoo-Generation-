@@ -17,6 +17,7 @@ from app.generators.OdooModuleGenerator import OdooModuleGenerator
 from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
 from app.services.git_deploy_service import GitDeployService
+from app.services.rag_service import RAGService
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -42,6 +43,7 @@ OUTPUT_DIR = os.path.join(BASE_DIR, "generated_modules")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ai_service = AIService()
+rag_service = RAGService()
 
 jobs: dict = {}
 
@@ -401,6 +403,24 @@ def read_root():
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+
+@app.post("/rag/index")
+def index_rag_documents(reset: bool = False):
+    try:
+        result = rag_service.index_directory(reset=reset)
+        return JSONResponse(status_code=200, content=result)
+    except Exception as exc:
+        logger.exception("RAG indexing failed")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/rag/search")
+def search_rag_documents(query: str, top_k: int = 3):
+    if not query:
+        raise HTTPException(status_code=400, detail="Query is required")
+    results = rag_service.search(query, top_k=top_k)
+    return {"query": query, "results": results}
 
 
 @app.post("/chat/", response_model=ChatResponse)
