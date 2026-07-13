@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <record id="products_action" model="ir.actions.act_window">
+            <field name="name">Products</field>
+            <field name="res_model">product</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage products</p>
+            </field>
+        </record>
+    </data>
+</odoo>

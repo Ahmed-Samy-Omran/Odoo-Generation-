@@ -368,7 +368,7 @@ Reference Context:
 Rules:
 1. Root object MUST contain key "modules" with a list of module configs.
 2. Use lowercase module names with underscores.
-3. Model technical names must be module_name.model_name.
+3. Model names should be simple names without module prefix (e.g., "book" not "library.book").
 4. Return fully expanded JSON only. Never use "..." or omit sections.
 
 Example output shape:
@@ -379,7 +379,7 @@ Example output shape:
       "module_description": "Library management",
       "models": [
         {{
-          "name": "library.book",
+          "name": "book",
           "description": "Book",
           "rec_name": "name",
           "fields": [

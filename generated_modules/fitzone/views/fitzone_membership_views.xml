@@ -1,7 +1,7 @@
 <odoo>
     <data>
         <!-- Tree View for Member Subscription -->
-        <record id="fitzone.fitzone_membership_tree_view" model="ir.ui.view">
+        <record id="fitzone_membership_tree_view" model="ir.ui.view">
             <field name="name">fitzone.membership.tree</field>
             <field name="model">fitzone.membership</field>
             <field name="arch" type="xml">
@@ -15,7 +15,7 @@
         </record>
 
         <!-- Form View for Member Subscription -->
-        <record id="fitzone.fitzone_membership_form_view" model="ir.ui.view">
+        <record id="fitzone_membership_form_view" model="ir.ui.view">
             <field name="name">fitzone.membership.form</field>
             <field name="model">fitzone.membership</field>
             <field name="arch" type="xml">

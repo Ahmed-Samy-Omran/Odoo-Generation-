@@ -1,0 +1,28 @@
+<odoo>
+    <data>
+        <record id="patients_action" model="ir.actions.act_window">
+            <field name="name">Patients</field>
+            <field name="res_model">clinic_management.patient</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage patient records</p>
+            </field>
+        </record>
+        <record id="doctors_action" model="ir.actions.act_window">
+            <field name="name">Doctors</field>
+            <field name="res_model">clinic_management.doctor</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage doctor records</p>
+            </field>
+        </record>
+        <record id="appointments_action" model="ir.actions.act_window">
+            <field name="name">Appointments</field>
+            <field name="res_model">clinic_management.appointment</field>
+            <field name="view_mode">tree,kanban,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage clinic appointments</p>
+            </field>
+        </record>
+    </data>
+</odoo>
