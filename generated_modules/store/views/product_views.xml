@@ -1,29 +1,29 @@
 <odoo>
     <data>
-        <!-- Tree View for Subscription Plan -->
-        <record id="fitzone_plan_tree_view" model="ir.ui.view">
-            <field name="name">fitzone.plan.tree</field>
-            <field name="model">fitzone.plan</field>
+        <!-- Tree View for Product -->
+        <record id="product_tree_view" model="ir.ui.view">
+            <field name="name">product.tree</field>
+            <field name="model">product</field>
             <field name="arch" type="xml">
                 <tree>
                     <field name="name"/>
                     <field name="price"/>
-                    <field name="duration_days"/>
+                    <field name="quantity"/>
                 </tree>
             </field>
         </record>
 
-        <!-- Form View for Subscription Plan -->
-        <record id="fitzone_plan_form_view" model="ir.ui.view">
-            <field name="name">fitzone.plan.form</field>
-            <field name="model">fitzone.plan</field>
+        <!-- Form View for Product -->
+        <record id="product_form_view" model="ir.ui.view">
+            <field name="name">product.form</field>
+            <field name="model">product</field>
             <field name="arch" type="xml">
                 <form>
                     <sheet>
                         <group>
                             <field name="name"/>
                             <field name="price"/>
-                            <field name="duration_days"/>
+                            <field name="quantity"/>
                         </group>
                     </sheet>
                 </form>

@@ -1,0 +1,68 @@
+<odoo>
+    <data>
+        <!-- Tree View for Appointment -->
+        <record id="clinic_management.clinic_management_appointment_tree_view" model="ir.ui.view">
+            <field name="name">clinic_management.appointment.tree</field>
+            <field name="model">clinic_management.appointment</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="patient_id"/>
+                    <field name="doctor_id"/>
+                    <field name="appointment_datetime"/>
+                    <field name="status"/>
+                    <field name="consultation_price"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Appointment -->
+        <record id="clinic_management.clinic_management_appointment_form_view" model="ir.ui.view">
+            <field name="name">clinic_management.appointment.form</field>
+            <field name="model">clinic_management.appointment</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="patient_id"/>
+                            <field name="doctor_id"/>
+                            <field name="appointment_datetime"/>
+                            <field name="status"/>
+                            <field name="consultation_price"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+        <!-- Kanban View for Appointment -->
+        <record id="clinic_management.clinic_management_appointment_kanban_view" model="ir.ui.view">
+            <field name="name">clinic_management.appointment.kanban</field>
+            <field name="model">clinic_management.appointment</field>
+            <field name="arch" type="xml">
+                <kanban default_group_by="status" default_order="status">
+                    <field name="id"/>
+<field name="status"/>                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_global_click">
+                                <div class="oe_kanban_details">
+                                    <ul>
+                                        <li><strong>Name:</strong> <field name="display_name"/></li>
+                                                <li><strong>Patient:</strong> <field name="patient_id"/></li>
+                                                <li><strong>Doctor:</strong> <field name="doctor_id"/></li>
+                                                <li><strong>Appointment Date & Time:</strong> <field name="appointment_datetime"/></li>
+                                                <li><strong>Status:</strong> <field name="status"/></li>
+                                                <li><strong>Consultation Price:</strong> <field name="consultation_price"/></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+
+
+    </data>
+</odoo>

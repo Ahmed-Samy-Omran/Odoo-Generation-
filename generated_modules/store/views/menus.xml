@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="store_menu"
+                  name="Store"
+                  sequence="10"/>
+        <menuitem id="products_menu"
+                  name="Products"
+                  parent="store_menu"
+                  action="products_action"
+                  sequence="10"/>
+    </data>
+</odoo>

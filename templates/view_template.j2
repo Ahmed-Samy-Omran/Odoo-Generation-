@@ -2,7 +2,7 @@
     <data>
 {% if is_customization %}
         <!-- Inherited Form View for {{ model_name }} -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_inherit_form_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_inherit_form_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.inherit.form</field>
             <field name="model">{{ model_name }}</field>
             <field name="inherit_id" ref="{{ inherit_model | replace(".", "_") }}_form_view"/>
@@ -16,7 +16,7 @@
         </record>
 {% else %}
         <!-- Tree View for {{ model_label }} -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_tree_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_tree_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.tree</field>
             <field name="model">{{ model_name }}</field>
             <field name="arch" type="xml">
@@ -29,7 +29,7 @@
         </record>
 
         <!-- Form View for {{ model_label }} -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_form_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_form_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.form</field>
             <field name="model">{{ model_name }}</field>
             <field name="arch" type="xml">
@@ -47,7 +47,7 @@
 
         {% if search_view %}
         <!-- Search View for {{ model_label }} -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_search_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_search_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.search</field>
             <field name="model">{{ model_name }}</field>
             <field name="arch" type="xml">
@@ -75,7 +75,7 @@
 
         {% if kanban_view %}
         <!-- Kanban View for {{ model_label }} -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_kanban_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_kanban_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.kanban</field>
             <field name="model">{{ model_name }}</field>
             <field name="arch" type="xml">
@@ -105,7 +105,7 @@
 
         {% if calendar_view %}
         <!-- Calendar View for {{ model_label }} -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_calendar_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_calendar_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.calendar</field>
             <field name="model">{{ model_name }}</field>
             <field name="arch" type="xml">
@@ -118,7 +118,7 @@
 
         {% if dashboard_view %}
         <!-- Dashboard View for {{ model_label }} (Placeholder) -->
-        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_dashboard_view" model="ir.ui.view">
+        <record id="{{ model_name | replace(".", "_") }}_dashboard_view" model="ir.ui.view">
             <field name="name">{{ model_name }}.dashboard</field>
             <field name="model">{{ model_name }}</field>
             <field name="arch" type="xml">

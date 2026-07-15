@@ -1,7 +1,7 @@
 <odoo>
     <data>
         <!-- Tree View for Gym Member -->
-        <record id="fitzone.fitzone_member_tree_view" model="ir.ui.view">
+        <record id="fitzone_member_tree_view" model="ir.ui.view">
             <field name="name">fitzone.member.tree</field>
             <field name="model">fitzone.member</field>
             <field name="arch" type="xml">
@@ -14,7 +14,7 @@
         </record>
 
         <!-- Form View for Gym Member -->
-        <record id="fitzone.fitzone_member_form_view" model="ir.ui.view">
+        <record id="fitzone_member_form_view" model="ir.ui.view">
             <field name="name">fitzone.member.form</field>
             <field name="model">fitzone.member</field>
             <field name="arch" type="xml">
