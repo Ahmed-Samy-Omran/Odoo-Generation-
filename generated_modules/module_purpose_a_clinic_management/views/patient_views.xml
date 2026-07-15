@@ -1,0 +1,37 @@
+<odoo>
+    <data>
+        <!-- Tree View for Stores patient details and medical history. -->
+        <record id="module_purpose_a_clinic_management.patient_tree_view" model="ir.ui.view">
+            <field name="name">patient.tree</field>
+            <field name="model">patient</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="phone"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Stores patient details and medical history. -->
+        <record id="module_purpose_a_clinic_management.patient_form_view" model="ir.ui.view">
+            <field name="name">patient.form</field>
+            <field name="model">patient</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="phone"/>
+                            <field name="appointment_ids"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

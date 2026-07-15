@@ -1,0 +1,4 @@
+# -*- coding: utf-8 -*-
+{% for model_file in model_files %}
+from . import {{ model_file }}
+{% endfor %}

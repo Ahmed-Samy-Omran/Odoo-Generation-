@@ -1,0 +1,40 @@
+<odoo>
+    <data>
+        <!-- Tree View for Appointment -->
+        <record id="create_an_odoo_module.create_an_odoo_module_appointment_tree_view" model="ir.ui.view">
+            <field name="name">create_an_odoo_module.appointment.tree</field>
+            <field name="model">create_an_odoo_module.appointment</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="patient_id"/>
+                    <field name="doctor_id"/>
+                    <field name="appointment_datetime"/>
+                    <field name="status"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Appointment -->
+        <record id="create_an_odoo_module.create_an_odoo_module_appointment_form_view" model="ir.ui.view">
+            <field name="name">create_an_odoo_module.appointment.form</field>
+            <field name="model">create_an_odoo_module.appointment</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="patient_id"/>
+                            <field name="doctor_id"/>
+                            <field name="appointment_datetime"/>
+                            <field name="status"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

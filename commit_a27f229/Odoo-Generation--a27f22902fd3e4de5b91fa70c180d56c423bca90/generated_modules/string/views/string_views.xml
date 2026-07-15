@@ -1,0 +1,81 @@
+<odoo>
+    <data>
+        <!-- Tree View for  -->
+        <record id="string.string_tree_view" model="ir.ui.view">
+            <field name="name">string.tree</field>
+            <field name="model">string</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="string"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for  -->
+        <record id="string.string_form_view" model="ir.ui.view">
+            <field name="name">string.form</field>
+            <field name="model">string</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="string"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        <!-- Search View for  -->
+        <record id="string.string_search_view" model="ir.ui.view">
+            <field name="name">string.search</field>
+            <field name="model">string</field>
+            <field name="arch" type="xml">
+                <search>
+                    <field name="string"/>
+                    <separator/>
+                    <filter name="string" string="string" domain="string"/>
+                    <group expand="0" string="Group By">
+                        <filter name="string" string="string" context="{'group_by': 'string'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <!-- Kanban View for  -->
+        <record id="string.string_kanban_view" model="ir.ui.view">
+            <field name="name">string.kanban</field>
+            <field name="model">string</field>
+            <field name="arch" type="xml">
+                <kanban default_group_by="string" default_order="string">
+                    <field name="id"/>
+<field name="string"/>                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_global_click">
+                                <div class="oe_kanban_details">
+                                    <ul>
+                                        <li><strong>Name:</strong> <field name="display_name"/></li>
+                                                <li><strong>string:</strong> <field name="string"/></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+        <!-- Calendar View for  -->
+        <record id="string.string_calendar_view" model="ir.ui.view">
+            <field name="name">string.calendar</field>
+            <field name="model">string</field>
+            <field name="arch" type="xml">
+                <calendar date_start="string" date_stop="string" all_day="string" color="string">
+                    <field name="display_name"/>
+                </calendar>
+            </field>
+        </record>
+
+
+    </data>
+</odoo>

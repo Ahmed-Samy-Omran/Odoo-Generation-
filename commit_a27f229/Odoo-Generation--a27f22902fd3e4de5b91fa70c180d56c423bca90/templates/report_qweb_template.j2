@@ -1,0 +1,30 @@
+<odoo>
+    <template id="report_template_{{ report_name_snake }}">
+        <t t-call="web.html_container">
+            <t t-foreach="docs" t-as="o">
+                <t t-call="web.external_layout">
+                    <div class="page">
+                        <h2>Report for <span t-field="o.display_name"/></h2>
+                        <p>Model: {{ model_name }}</p>
+                        <table class="table table-condensed">
+                            <thead>
+                                <tr>
+                                    <th>Field</th>
+                                    <th>Value</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for field_name in fields %}
+                                <tr>
+                                    <td>{{ field_name | replace("_", " ") | title }}</td>
+                                    <td><span t-field="o.{{ field_name }}"/></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+            </t>
+        </t>
+    </template>
+</odoo>

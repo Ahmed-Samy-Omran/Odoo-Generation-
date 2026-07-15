@@ -1,0 +1,19 @@
+<odoo>
+    <data>
+{% for action in actions %}
+        <record id="{{ action.name | lower | replace('.', '_') | replace(' ', '_') }}_action" model="ir.actions.act_window">
+            <field name="name">{{ action.name }}</field>
+            <field name="res_model">{{ action.res_model }}</field>
+            <field name="view_mode">{{ action.view_mode }}</field>
+{% if action.domain %}
+            <field name="domain">{{ action.domain }}</field>
+{% endif %}
+{% if action.help_text %}
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">{{ action.help_text }}</p>
+            </field>
+{% endif %}
+        </record>
+{% endfor %}
+    </data>
+</odoo>

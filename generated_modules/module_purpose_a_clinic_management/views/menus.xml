@@ -1,0 +1,22 @@
+<odoo>
+    <data>
+        <menuitem id="clinic_management_menu"
+                  name="Clinic Management"
+                  sequence="10"/>
+        <menuitem id="patients_menu"
+                  name="Patients"
+                  parent="clinic_management_menu"
+                  action="patients_action"
+                  sequence="10"/>
+        <menuitem id="doctors_menu"
+                  name="Doctors"
+                  parent="clinic_management_menu"
+                  action="doctors_action"
+                  sequence="20"/>
+        <menuitem id="appointments_menu"
+                  name="Appointments"
+                  parent="clinic_management_menu"
+                  action="appointments_action"
+                  sequence="30"/>
+    </data>
+</odoo>

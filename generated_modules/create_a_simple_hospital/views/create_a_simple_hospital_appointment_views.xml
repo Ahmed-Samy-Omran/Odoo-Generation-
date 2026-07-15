@@ -1,0 +1,40 @@
+<odoo>
+    <data>
+        <!-- Tree View for Appointment -->
+        <record id="create_a_simple_hospital.create_a_simple_hospital_appointment_tree_view" model="ir.ui.view">
+            <field name="name">create_a_simple_hospital.appointment.tree</field>
+            <field name="model">create_a_simple_hospital.appointment</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="patient_id"/>
+                    <field name="doctor_id"/>
+                    <field name="appointment_datetime"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Appointment -->
+        <record id="create_a_simple_hospital.create_a_simple_hospital_appointment_form_view" model="ir.ui.view">
+            <field name="name">create_a_simple_hospital.appointment.form</field>
+            <field name="model">create_a_simple_hospital.appointment</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="patient_id"/>
+                            <field name="doctor_id"/>
+                            <field name="appointment_datetime"/>
+                            <field name="state"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

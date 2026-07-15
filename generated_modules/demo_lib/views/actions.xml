@@ -1,0 +1,9 @@
+<odoo>
+    <data>
+        <record id="books_action" model="ir.actions.act_window">
+            <field name="name">Books</field>
+            <field name="res_model">book</field>
+            <field name="view_mode">tree,form</field>
+        </record>
+    </data>
+</odoo>

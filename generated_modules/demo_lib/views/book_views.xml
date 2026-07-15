@@ -1,0 +1,36 @@
+<odoo>
+    <data>
+        <!-- Tree View for Book -->
+        <record id="demo_lib.book_tree_view" model="ir.ui.view">
+            <field name="name">book.tree</field>
+            <field name="model">book</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="isbn"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Book -->
+        <record id="demo_lib.book_form_view" model="ir.ui.view">
+            <field name="name">book.form</field>
+            <field name="model">book</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="isbn"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

@@ -1,0 +1,34 @@
+<odoo>
+    <data noupdate="1">
+        <record id="group_library_/_user" model="res.groups">
+            <field name="name">Library Management/Library / User</field>
+            <field name="comment">Library User</field>
+            <field name="implied_ids" eval="[(4, ref('base.group_user'))]"/>
+        </record>
+
+        <record id="access_library_/_user_library_management_book" model="ir.model.access">
+            <field name="name">Library / User Access to library_management.book</field>
+            <field name="model_id" ref="library_management_book"/>
+            <field name="group_id" ref="group_library_/_user"/>
+            <field name="perm_read">True</field>
+            <field name="perm_write">True</field>
+            <field name="perm_create">True</field>
+            <field name="perm_unlink">False</field>
+        </record>
+        <record id="group_library_/_manager" model="res.groups">
+            <field name="name">Library Management/Library / Manager</field>
+            <field name="comment">Library Manager</field>
+            <field name="implied_ids" eval="[(4, ref('base.group_user')), (4, ref('library_management.group_library_user'))]"/>
+        </record>
+
+        <record id="access_library_/_manager_library_management_book" model="ir.model.access">
+            <field name="name">Library / Manager Access to library_management.book</field>
+            <field name="model_id" ref="library_management_book"/>
+            <field name="group_id" ref="group_library_/_manager"/>
+            <field name="perm_read">True</field>
+            <field name="perm_write">True</field>
+            <field name="perm_create">True</field>
+            <field name="perm_unlink">True</field>
+        </record>
+    </data>
+</odoo>

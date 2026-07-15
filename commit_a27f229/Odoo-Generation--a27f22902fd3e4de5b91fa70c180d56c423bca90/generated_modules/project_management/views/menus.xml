@@ -1,0 +1,22 @@
+<odoo>
+    <data>
+        <menuitem id="project_management_menu"
+                  name="Project Management"
+                  sequence="10"/>
+        <menuitem id="projects_menu"
+                  name="Projects"
+                  parent="project_management_menu"
+                  action="projects_action"
+                  sequence="10"/>
+        <menuitem id="tasks_menu"
+                  name="Tasks"
+                  parent="project_management_menu"
+                  action="tasks_action"
+                  sequence="20"/>
+        <menuitem id="milestones_menu"
+                  name="Milestones"
+                  parent="project_management_menu"
+                  action="milestones_action"
+                  sequence="30"/>
+    </data>
+</odoo>

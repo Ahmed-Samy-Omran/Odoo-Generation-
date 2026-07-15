@@ -1,0 +1,17 @@
+# -*- coding: utf-8 -*-
+{
+    'name': 'the_user_wants_to',
+    'version': '1.0',
+    'category': 'Tools',
+    'summary': 'The user wants to rename the Odoo model technical name from `clinic.patient` to `clinic.customer`. This change entails updating the corresponding Python model definition file (`.py`) to reflect the new technical name. Additionally, all XML view and action definition files (`.xml`) that reference `clinic.patient` must be updated to use `clinic.customer`. Crucially, any relational fields (e.g., Many2one, One2many, Many2many) in other Odoo models that currently link to `clinic.patient` must also be updated to link to `clinic.customer`. No changes to the model's display name or existing fields within the model `clinic.patient` are required.',
+    'author': 'Generated Module',
+    'depends': ['base'],
+    'data': [
+        'security/ir.model.access.csv',
+        'views/fitzone_member_views.xml',
+        'views/fitzone_plan_views.xml',
+        'views/fitzone_membership_views.xml',
+    ],
+    'installable': True,
+    'application': False,
+}

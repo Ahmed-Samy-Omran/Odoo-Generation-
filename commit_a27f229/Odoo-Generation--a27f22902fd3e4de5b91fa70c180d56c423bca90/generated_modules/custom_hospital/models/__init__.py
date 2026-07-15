@@ -1,0 +1,1 @@
+# -*- coding: utf-8 -*-from . import hospital_patientfrom . import hospital_doctor

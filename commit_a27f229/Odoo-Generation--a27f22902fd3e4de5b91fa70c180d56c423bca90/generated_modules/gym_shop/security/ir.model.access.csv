@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_gym_shop_product_user,Products sold in the gym shop. Access,model_gym_shop_product,base.group_user,1,1,1,1
+access_gym_shop_sale_order_user,Records of product sales. Access,model_gym_shop_sale_order,base.group_user,1,1,1,1
+access_gym_shop_sale_order_line_user,Individual items in a sale order. Access,model_gym_shop_sale_order_line,base.group_user,1,1,1,1

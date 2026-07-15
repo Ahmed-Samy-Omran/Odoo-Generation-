@@ -1,0 +1,37 @@
+<odoo>
+    <data>
+        <menuitem id="school_management_menu"
+                  name="School Management"
+                  sequence="10"/>
+        <menuitem id="students_menu"
+                  name="Students"
+                  parent="school_management_menu"
+                  action="the_user_wants_an.action_student"
+                  sequence="10"/>
+        <menuitem id="teachers_menu"
+                  name="Teachers"
+                  parent="school_management_menu"
+                  action="the_user_wants_an.action_teacher"
+                  sequence="20"/>
+        <menuitem id="classes_menu"
+                  name="Classes"
+                  parent="school_management_menu"
+                  action="the_user_wants_an.action_school_class"
+                  sequence="30"/>
+        <menuitem id="courses_menu"
+                  name="Courses"
+                  parent="school_management_menu"
+                  action="the_user_wants_an.action_course"
+                  sequence="40"/>
+        <menuitem id="grades_menu"
+                  name="Grades"
+                  parent="school_management_menu"
+                  action="the_user_wants_an.action_grade"
+                  sequence="50"/>
+        <menuitem id="schedule_menu"
+                  name="Schedule"
+                  parent="school_management_menu"
+                  action="schedule_action"
+                  sequence="60"/>
+    </data>
+</odoo>

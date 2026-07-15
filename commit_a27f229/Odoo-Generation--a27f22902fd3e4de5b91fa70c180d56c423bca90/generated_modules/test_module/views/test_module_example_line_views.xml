@@ -1,0 +1,39 @@
+<odoo>
+    <data>
+        <!-- Tree View for Example Line Model -->
+        <record id="test_module.test_module_example_line_tree_view" model="ir.ui.view">
+            <field name="name">test_module.example_line.tree</field>
+            <field name="model">test_module.example_line</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="quantity"/>
+                    <field name="price"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Example Line Model -->
+        <record id="test_module.test_module_example_line_form_view" model="ir.ui.view">
+            <field name="name">test_module.example_line.form</field>
+            <field name="model">test_module.example_line</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="example_id"/>
+                            <field name="quantity"/>
+                            <field name="price"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

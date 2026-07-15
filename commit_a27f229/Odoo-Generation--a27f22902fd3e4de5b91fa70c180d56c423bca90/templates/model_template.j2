@@ -1,0 +1,78 @@
+# -*- coding: utf-8 -*-
+from odoo import models, fields, api
+
+class {{ class_name }}(models.Model):
+{% if is_inherit %}
+    _inherit = '{{ inherit_model }}'
+{% if not is_customization %}
+    _name = '{{ model_name }}'
+{% endif %}
+{% else %}
+    _name = '{{ model_name }}'
+{% endif %}
+    _description = '{{ model_description | default("") }}'
+{% if rec_name %}
+    _rec_name = '{{ rec_name }}'
+{% endif %}
+
+{% for field in fields %}
+{% if field.is_compute %}
+    {{ field.name }} = fields.{{ field.type | capitalize }}(
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+        compute='_compute_{{ field.name }}',
+    )
+
+    {% if field.depends_fields %}
+    @api.depends({{ field.depends_fields | join(', ') | replace("'", "'") }})
+    {% endif %}
+    def _compute_{{ field.name }}(self):
+        for rec in self:
+            {{ field.compute_code | indent(12) }}
+
+{% elif field.type == 'many2one' %}
+    {{ field.name }} = fields.Many2one(
+        comodel_name='{{ field.relation }}',
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+{% if field.required %}
+        required=True,
+{% endif %}
+    )
+{% elif field.type == 'one2many' %}
+    {{ field.name }} = fields.One2many(
+        comodel_name='{{ field.relation }}',
+        inverse_name='{{ field.inverse_name }}',
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+{% if field.required %}
+        required=True,
+{% endif %}
+    )
+{% elif field.type == 'many2many' %}
+    {{ field.name }} = fields.Many2many(
+        comodel_name='{{ field.relation }}',
+{% if field.relation_table %}
+        relation='{{ field.relation_table }}',
+{% endif %}
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+{% if field.required %}
+        required=True,
+{% endif %}
+    )
+{% elif field.type == 'selection' %}
+    {{ field.name }} = fields.Selection(
+{% if field.selection_options %}
+        selection={{ field.selection_options }},
+{% endif %}
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+{% if field.required %}
+        required=True,
+{% endif %}
+    )
+{% else %}
+    {{ field.name }} = fields.{{ field.type | capitalize }}(
+        string='{{ field.label | default(field.name.replace("_", " ").title()) }}',
+{% if field.required %}
+        required=True,
+{% endif %}
+    )
+{% endif %}
+{% endfor %}

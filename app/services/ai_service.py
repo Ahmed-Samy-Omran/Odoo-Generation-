@@ -368,7 +368,7 @@ Reference Context:
 Rules:
 1. Root object MUST contain key "modules" with a list of module configs.
 2. Use lowercase module names with underscores.
-3. Model technical names must be module_name.model_name.
+3. Model technical names should be short and not prefixed with the module name (e.g., use 'patient', 'doctor' instead of 'hospital.patient').
 4. Return fully expanded JSON only. Never use "..." or omit sections.
 
 Example output shape:

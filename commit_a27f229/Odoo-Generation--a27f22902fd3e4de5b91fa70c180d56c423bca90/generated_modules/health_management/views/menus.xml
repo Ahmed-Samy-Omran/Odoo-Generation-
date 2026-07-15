@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="health_management_menu"
+                  name="Health Management"
+                  sequence="10"/>
+        <menuitem id="health_records_menu"
+                  name="Health Records"
+                  parent="health_management_menu"
+                  action="health_records_action"
+                  sequence="10"/>
+    </data>
+</odoo>

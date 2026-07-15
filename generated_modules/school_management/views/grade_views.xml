@@ -1,0 +1,41 @@
+<odoo>
+    <data>
+        <!-- Tree View for Grade -->
+        <record id="school_management.grade_tree_view" model="ir.ui.view">
+            <field name="name">grade.tree</field>
+            <field name="model">grade</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="score"/>
+                    <field name="grade"/>
+                    <field name="exam_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Grade -->
+        <record id="school_management.grade_form_view" model="ir.ui.view">
+            <field name="name">grade.form</field>
+            <field name="model">grade</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="student_id"/>
+                            <field name="course_id"/>
+                            <field name="score"/>
+                            <field name="grade"/>
+                            <field name="exam_date"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

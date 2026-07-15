@@ -1,0 +1,44 @@
+<odoo>
+    <data>
+        <record id="patients_action" model="ir.actions.act_window">
+            <field name="name">Patients</field>
+            <field name="res_model">create_an_odoo_module.patient</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage patient records</p>
+            </field>
+        </record>
+        <record id="doctors_action" model="ir.actions.act_window">
+            <field name="name">Doctors</field>
+            <field name="res_model">create_an_odoo_module.doctor</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage doctor records</p>
+            </field>
+        </record>
+        <record id="medical_departments_action" model="ir.actions.act_window">
+            <field name="name">Medical Departments</field>
+            <field name="res_model">create_an_odoo_module.department</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage medical departments</p>
+            </field>
+        </record>
+        <record id="appointments_action" model="ir.actions.act_window">
+            <field name="name">Appointments</field>
+            <field name="res_model">create_an_odoo_module.appointment</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Schedule and manage appointments</p>
+            </field>
+        </record>
+        <record id="consultations_action" model="ir.actions.act_window">
+            <field name="name">Consultations</field>
+            <field name="res_model">create_an_odoo_module.consultation</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Record patient consultation details</p>
+            </field>
+        </record>
+    </data>
+</odoo>

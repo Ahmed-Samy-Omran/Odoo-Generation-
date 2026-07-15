@@ -1,0 +1,74 @@
+<odoo>
+    <data>
+        <!-- Tree View for Sales orders management. -->
+        <record id="module_purpose_manage_electronic_store.sale_order_tree_view" model="ir.ui.view">
+            <field name="name">sale.order.tree</field>
+            <field name="model">sale.order</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="reference"/>
+                    <field name="date"/>
+                    <field name="customer_id"/>
+                    <field name="total_amount"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Sales orders management. -->
+        <record id="module_purpose_manage_electronic_store.sale_order_form_view" model="ir.ui.view">
+            <field name="name">sale.order.form</field>
+            <field name="model">sale.order</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="reference"/>
+                            <field name="date"/>
+                            <field name="customer_id"/>
+                            <field name="order_line_ids"/>
+                            <field name="total_amount"/>
+                            <field name="state"/>
+                            <field name="discount"/>
+                            <field name="tax"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+        <!-- Kanban View for Sales orders management. -->
+        <record id="module_purpose_manage_electronic_store.sale_order_kanban_view" model="ir.ui.view">
+            <field name="name">sale.order.kanban</field>
+            <field name="model">sale.order</field>
+            <field name="arch" type="xml">
+                <kanban  default_order="state">
+                    <field name="id"/>
+<field name="state"/>                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_global_click">
+                                <div class="oe_kanban_details">
+                                    <ul>
+                                        <li><strong>Name:</strong> <field name="display_name"/></li>
+                                                <li><strong>Invoice Number:</strong> <field name="reference"/></li>
+                                                <li><strong>Date:</strong> <field name="date"/></li>
+                                                <li><strong>Customer:</strong> <field name="customer_id"/></li>
+                                                <li><strong>Order Lines:</strong> <field name="order_line_ids"/></li>
+                                                <li><strong>Total Amount:</strong> <field name="total_amount"/></li>
+                                                <li><strong>Status:</strong> <field name="state"/></li>
+                                                <li><strong>Discount (%):</strong> <field name="discount"/></li>
+                                                <li><strong>Tax (%):</strong> <field name="tax"/></li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+
+
+    </data>
+</odoo>

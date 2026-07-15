@@ -1,0 +1,44 @@
+<odoo>
+    <data>
+        <record id="students_action" model="ir.actions.act_window">
+            <field name="name">Students</field>
+            <field name="res_model">student</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage all students</p>
+            </field>
+        </record>
+        <record id="teachers_action" model="ir.actions.act_window">
+            <field name="name">Teachers</field>
+            <field name="res_model">teacher</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage all teachers</p>
+            </field>
+        </record>
+        <record id="classes_action" model="ir.actions.act_window">
+            <field name="name">Classes</field>
+            <field name="res_model">class</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage all classes</p>
+            </field>
+        </record>
+        <record id="courses_action" model="ir.actions.act_window">
+            <field name="name">Courses</field>
+            <field name="res_model">course</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage all courses</p>
+            </field>
+        </record>
+        <record id="grades_action" model="ir.actions.act_window">
+            <field name="name">Grades</field>
+            <field name="res_model">grade</field>
+            <field name="view_mode">tree,form</field>
+            <field name="help" type="html">
+                <p class="o_view_nocontent_smiling_face">Manage student grades</p>
+            </field>
+        </record>
+    </data>
+</odoo>

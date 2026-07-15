@@ -1,0 +1,17 @@
+<odoo>
+    <data>
+        <menuitem id="fitzone_menu"
+                  name="FitZone"
+                  sequence="10"/>
+        <menuitem id="members_menu"
+                  name="Members"
+                  parent="fitzone_menu"
+                  action="members_action"
+                  sequence="10"/>
+        <menuitem id="plans_menu"
+                  name="Plans"
+                  parent="fitzone_menu"
+                  action="plans_action"
+                  sequence="20"/>
+    </data>
+</odoo>

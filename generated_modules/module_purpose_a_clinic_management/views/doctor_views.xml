@@ -1,0 +1,39 @@
+<odoo>
+    <data>
+        <!-- Tree View for Stores doctor details and consultation fees. -->
+        <record id="module_purpose_a_clinic_management.doctor_tree_view" model="ir.ui.view">
+            <field name="name">doctor.tree</field>
+            <field name="model">doctor</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="specialty"/>
+                    <field name="consultation_fee"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Stores doctor details and consultation fees. -->
+        <record id="module_purpose_a_clinic_management.doctor_form_view" model="ir.ui.view">
+            <field name="name">doctor.form</field>
+            <field name="model">doctor</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="specialty"/>
+                            <field name="consultation_fee"/>
+                            <field name="total_earnings"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

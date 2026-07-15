@@ -1,0 +1,17 @@
+<odoo>
+    <data>
+        <menuitem id="test_module_menu"
+                  name="Test Module"
+                  sequence="10"/>
+        <menuitem id="examples_menu"
+                  name="Examples"
+                  parent="test_module_menu"
+                  action="examples_action"
+                  sequence="10"/>
+        <menuitem id="example_lines_menu"
+                  name="Example Lines"
+                  parent="test_module_menu"
+                  action="example_lines_action"
+                  sequence="20"/>
+    </data>
+</odoo>

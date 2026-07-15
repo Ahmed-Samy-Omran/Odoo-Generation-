@@ -1,0 +1,38 @@
+<odoo>
+    <data>
+        <!-- Tree View for Doctor -->
+        <record id="create_an_odoo_module.create_an_odoo_module_doctor_tree_view" model="ir.ui.view">
+            <field name="name">create_an_odoo_module.doctor.tree</field>
+            <field name="model">create_an_odoo_module.doctor</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="specialization"/>
+                    <field name="license_number"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Doctor -->
+        <record id="create_an_odoo_module.create_an_odoo_module_doctor_form_view" model="ir.ui.view">
+            <field name="name">create_an_odoo_module.doctor.form</field>
+            <field name="model">create_an_odoo_module.doctor</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="specialization"/>
+                            <field name="license_number"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

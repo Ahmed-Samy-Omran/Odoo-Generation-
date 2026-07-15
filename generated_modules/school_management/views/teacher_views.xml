@@ -1,0 +1,43 @@
+<odoo>
+    <data>
+        <!-- Tree View for Teacher -->
+        <record id="school_management.teacher_tree_view" model="ir.ui.view">
+            <field name="name">teacher.tree</field>
+            <field name="model">teacher</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="email"/>
+                    <field name="specialization"/>
+                    <field name="hire_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Teacher -->
+        <record id="school_management.teacher_form_view" model="ir.ui.view">
+            <field name="name">teacher.form</field>
+            <field name="model">teacher</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="email"/>
+                            <field name="phone"/>
+                            <field name="specialization"/>
+                            <field name="hire_date"/>
+                            <field name="salary"/>
+                            <field name="course_ids"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

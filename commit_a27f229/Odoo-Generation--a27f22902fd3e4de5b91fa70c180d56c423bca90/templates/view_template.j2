@@ -1,0 +1,139 @@
+<odoo>
+    <data>
+{% if is_customization %}
+        <!-- Inherited Form View for {{ model_name }} -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_inherit_form_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.inherit.form</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="inherit_id" ref="{{ inherit_model | replace(".", "_") }}_form_view"/>
+            <field name="arch" type="xml">
+                <xpath expr="//sheet/group" position="inside">
+                    {% for field in fields %}
+                    <field name="{{ field.name }}"/>
+                    {% endfor %}
+                </xpath>
+            </field>
+        </record>
+{% else %}
+        <!-- Tree View for {{ model_label }} -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_tree_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.tree</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <tree>
+                    {% for field_name in tree_view_fields %}
+                    <field name="{{ field_name }}"/>
+                    {% endfor %}
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for {{ model_label }} -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_form_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.form</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            {% for field_name in form_view_fields %}
+                            <field name="{{ field_name }}"/>
+                            {% endfor %}
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+        {% if search_view %}
+        <!-- Search View for {{ model_label }} -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_search_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.search</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <search>
+                    {% for field_name in search_view.fields %}
+                    <field name="{{ field_name }}"/>
+                    {% endfor %}
+                    {% if search_view.filters %}
+                    <separator/>
+                    {% for filter in search_view.filters %}
+                    <filter name="{{ filter.name }}" string="{{ filter.string }}" {% if filter.domain %}domain="{{ filter.domain }}"{% endif %}/>
+                    {% endfor %}
+                    {% endif %}
+                    {% if search_view.group_by %}
+                    <group expand="0" string="Group By">
+                        {% for group_by in search_view.group_by %}
+                        <filter name="{{ group_by.name }}" string="{{ group_by.string }}" context="{'group_by': '{{ group_by.name }}'}"/>
+                        {% endfor %}
+                    </group>
+                    {% endif %}
+                </search>
+            </field>
+        </record>
+        {% endif %}
+
+        {% if kanban_view %}
+        <!-- Kanban View for {{ model_label }} -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_kanban_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.kanban</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <kanban {% if kanban_view.default_group_by %}default_group_by="{{ kanban_view.default_group_by }}"{% endif %} {% if kanban_view.color_field %}default_order="{{ kanban_view.color_field }}"{% endif %}>
+                    <field name="id"/>
+                    {% if kanban_view.color_field %}<field name="{{ kanban_view.color_field }}"/>{% endif %}
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_global_click">
+                                <div class="oe_kanban_details">
+                                    <ul>
+                                        <li><strong>Name:</strong> <field name="display_name"/></li>
+                                        {% for field in fields %}
+                                            {% if field.name not in ['display_name', 'id'] %}
+                                                <li><strong>{{ field.label | default(field.name.replace("_", " ").title()) }}:</strong> <field name="{{ field.name }}"/></li>
+                                            {% endif %}
+                                        {% endfor %}
+                                    </ul>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+        {% endif %}
+
+        {% if calendar_view %}
+        <!-- Calendar View for {{ model_label }} -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_calendar_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.calendar</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <calendar date_start="{{ calendar_view.date_start }}" {% if calendar_view.date_stop %}date_stop="{{ calendar_view.date_stop }}"{% endif %} {% if calendar_view.all_day %}all_day="{{ calendar_view.all_day }}"{% endif %} {% if calendar_view.color %}color="{{ calendar_view.color }}"{% endif %}>
+                    <field name="display_name"/>
+                </calendar>
+            </field>
+        </record>
+        {% endif %}
+
+        {% if dashboard_view %}
+        <!-- Dashboard View for {{ model_label }} (Placeholder) -->
+        <record id="{{ module_name }}.{{ model_name | replace(".", "_") }}_dashboard_view" model="ir.ui.view">
+            <field name="name">{{ model_name }}.dashboard</field>
+            <field name="model">{{ model_name }}</field>
+            <field name="arch" type="xml">
+                <dashboard>
+                    <group>
+                        <block>
+                            <h3>{{ model_label }} Dashboard</h3>
+                            <p>This is a placeholder for the {{ model_label }} dashboard. Customize it with your desired widgets and data.</p>
+                        </block>
+                    </group>
+                </dashboard>
+            </field>
+        </record>
+        {% endif %}
+
+{% endif %}
+    </data>
+</odoo>

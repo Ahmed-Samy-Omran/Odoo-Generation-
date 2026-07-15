@@ -1,0 +1,12 @@
+<odoo>
+    <data>
+        <menuitem id="azayak_menu"
+                  name="Azayak"
+                  sequence="10"/>
+        <menuitem id="examples_menu"
+                  name="Examples"
+                  parent="azayak_menu"
+                  action="azayak_example_action"
+                  sequence="10"/>
+    </data>
+</odoo>
