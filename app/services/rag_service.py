@@ -1,11 +1,19 @@
 import os
 import re
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+logger = logging.getLogger(__name__)
+
 
 class RAGService:
-    """Local RAG service for indexing Odoo addons and retrieving relevant chunks."""
+    """Local RAG service for indexing Odoo addons and retrieving relevant chunks.
+
+    This service is optional — if sentence-transformers or chromadb cannot be
+    imported (e.g. due to a PyTorch version conflict), RAG will be silently
+    disabled and the AI service will proceed without local reference context.
+    """
 
     def __init__(
         self,
@@ -27,6 +35,7 @@ class RAGService:
         self._client = None
         self._collection = None
         self._embedder = None
+        self._rag_available: Optional[bool] = None  # None = not yet checked
 
     def _resolve_path(self, path: Optional[str]) -> str:
         if not path:
@@ -35,16 +44,31 @@ class RAGService:
             return path
         return os.path.join(self.repo_root, path)
 
+    def _is_available(self) -> bool:
+        """Check once whether RAG dependencies can be loaded."""
+        if self._rag_available is not None:
+            return self._rag_available
+        try:
+            self._get_dependencies()
+            self._rag_available = True
+        except RuntimeError as exc:
+            logger.warning("RAG service disabled: %s", exc)
+            self._rag_available = False
+        return self._rag_available
+
     def _get_dependencies(self):
         try:
             import chromadb  # type: ignore
-        except ImportError as exc:  # pragma: no cover - runtime dependency check
+        except ImportError as exc:  # pragma: no cover
             raise RuntimeError("chromadb is required. Install it with: pip install chromadb") from exc
 
         try:
             from sentence_transformers import SentenceTransformer  # type: ignore
-        except ImportError as exc:  # pragma: no cover - runtime dependency check
-            raise RuntimeError("sentence-transformers is required. Install it with: pip install sentence-transformers") from exc
+        except (ImportError, Exception) as exc:  # pragma: no cover
+            raise RuntimeError(
+                f"sentence-transformers could not be loaded ({exc}). "
+                "RAG search will be disabled."
+            ) from exc
 
         return chromadb, SentenceTransformer
 
@@ -128,6 +152,13 @@ class RAGService:
         return embeddings.tolist()
 
     def index_directory(self, source_path: Optional[str] = None, reset: bool = False) -> Dict[str, Any]:
+        if not self._is_available():
+            return {
+                "success": False,
+                "error": "RAG dependencies unavailable (sentence-transformers/chromadb could not be loaded).",
+                "indexed_files": 0,
+                "indexed_chunks": 0,
+            }
         self._ensure_ready()
         if reset:
             try:
@@ -170,6 +201,9 @@ class RAGService:
         if not query or not query.strip():
             return []
 
+        if not self._is_available():
+            return []
+
         self._ensure_ready()
         query_embedding = self._embed_texts([query])[0]
         results = self._collection.query(
@@ -198,7 +232,15 @@ class RAGService:
         sections = []
         for idx, result in enumerate(results, start=1):
             source = result.get("metadata", {}).get("source", "unknown")
+            # Avoid feeding previously generated modules back into the AI prompt
+            if "generated_modules" in source or source.startswith("generated_modules/"):
+                continue
             content = (result.get("content") or "").strip()
-            sections.append(f"[{idx}] Source: {source}\n{content[:2000]}")
+            # Return a short, single-line snippet to reduce noise and prevent accidental code copying
+            snippet = content.replace("\n", " ")[:400]
+            sections.append(f"[{idx}] Source: {source} — {snippet}")
+
+        if not sections:
+            return "No local reference context available."
 
         return "Reference Context:\n" + "\n\n".join(sections)

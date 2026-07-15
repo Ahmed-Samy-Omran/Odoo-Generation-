@@ -39,13 +39,41 @@ app.add_middleware(
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
 OUTPUT_DIR = os.path.join(BASE_DIR, "generated_modules")
+JOBS_STATE_PATH = os.path.join(BASE_DIR, "jobs_state.json")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ai_service = AIService()
 rag_service = RAGService()
 
-jobs: dict = {}
+
+def _load_jobs() -> dict:
+    if not os.path.exists(JOBS_STATE_PATH):
+        return {}
+
+    try:
+        with open(JOBS_STATE_PATH, "r", encoding="utf-8") as f:
+            loaded = json.load(f)
+    except Exception:
+        return {}
+
+    for job in loaded.values():
+        if job.get("status") in ("pending", "running"):
+            job["status"] = "error"
+            job["message"] = "Server restarted while job was running. Please resubmit."
+            job["error"] = "SERVER_RESTART"
+    return loaded
+
+
+def _save_jobs() -> None:
+    try:
+        with open(JOBS_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump(jobs, f, indent=2, ensure_ascii=False)
+    except OSError:
+        logger.exception("Failed to save job state")
+
+
+jobs: dict = _load_jobs()
 
 TEXT_EXTENSIONS = {".py", ".xml", ".csv", ".js", ".css", ".html", ".md", ".txt", ".json"}
 
@@ -78,16 +106,19 @@ def _new_job() -> str:
         "download_url": None,
         "github_url": None,
         "error": None,
+        "schema_preview": None,
         "_module_paths": [],
         "_zip_path": None,
         "_zip_name": None,
     }
+    _save_jobs()
     return job_id
 
 
 def _update_job(job_id: str, **kwargs):
     if job_id in jobs:
         jobs[job_id].update(kwargs)
+        _save_jobs()
 
 
 def _build_schema_preview(modules: list) -> dict:
