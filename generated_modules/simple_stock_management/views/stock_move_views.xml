@@ -1,0 +1,41 @@
+<odoo>
+    <data>
+        <!-- Tree View for Track stock movements (in/out). -->
+        <record id="simple_stock_management.stock_move_tree_view" model="ir.ui.view">
+            <field name="name">stock.move.tree</field>
+            <field name="model">stock.move</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="product_id"/>
+                    <field name="move_type"/>
+                    <field name="quantity"/>
+                    <field name="move_date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Track stock movements (in/out). -->
+        <record id="simple_stock_management.stock_move_form_view" model="ir.ui.view">
+            <field name="name">stock.move.form</field>
+            <field name="model">stock.move</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="product_id"/>
+                            <field name="move_type"/>
+                            <field name="quantity"/>
+                            <field name="price"/>
+                            <field name="move_date"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>
