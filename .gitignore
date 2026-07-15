@@ -1,6 +1,16 @@
 .env
 .venv/
+venv/
 .env.local
 __pycache__/
 *.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+chroma_db/
 jobs_state.json
+*.zip
+commit_a27f229/
+commit_a27f229.zip
+.refactor_history/
