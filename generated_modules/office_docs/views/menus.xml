@@ -1,9 +1,0 @@
-<odoo>
-    <data>
-        <menuitem id="documents_menu"
-                  name="Documents"
-                  parent="base.menu_administration"
-                  action="office_docs.action_office_document"
-                  sequence="10"/>
-    </data>
-</odoo>

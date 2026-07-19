@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_project_management_project_user,Project Access,model_project_management_project,base.group_user,1,1,1,1
-access_project_management_task_user,Task Access,model_project_management_task,base.group_user,1,1,1,1
-access_project_management_milestone_user,Milestone Access,model_project_management_milestone,base.group_user,1,1,1,1

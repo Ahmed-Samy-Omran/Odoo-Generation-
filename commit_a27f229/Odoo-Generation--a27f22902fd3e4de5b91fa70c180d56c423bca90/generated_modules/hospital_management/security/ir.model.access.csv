@@ -1,1 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlinkaccess_hospital_patient_user,Patient Records Access,model_hospital_patient,base.group_user,1,1,1,1access_hospital_doctor_user,Doctor Records Access,model_hospital_doctor,base.group_user,1,1,1,1access_hospital_appointment_user,Patient Appointments Access,model_hospital_appointment,base.group_user,1,1,1,1

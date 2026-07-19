@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_product_user,Handles product inventory details. Access,model_product,base.group_user,1,1,1,1
+access_invoice_user,Handles purchase/sales invoices related to products. Access,model_invoice,base.group_user,1,1,1,1
+access_invoice_line_user,Handles individual line items within an invoice. Access,model_invoice_line,base.group_user,1,1,1,1

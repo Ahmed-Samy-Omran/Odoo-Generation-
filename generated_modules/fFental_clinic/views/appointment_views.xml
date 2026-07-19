@@ -1,0 +1,39 @@
+<odoo>
+    <data>
+        <!-- Tree View for Dental Appointment -->
+        <record id="appointment_tree_view" model="ir.ui.view">
+            <field name="name">appointment.tree</field>
+            <field name="model">appointment</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="patient_name"/>
+                    <field name="date"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Dental Appointment -->
+        <record id="appointment_form_view" model="ir.ui.view">
+            <field name="name">appointment.form</field>
+            <field name="model">appointment</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="patient_name"/>
+                            <field name="date"/>
+                            <field name="procedure"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

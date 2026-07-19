@@ -1,7 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_the_user_wants_an_student_user,Student Access,model_the_user_wants_an_student,base.group_user,1,1,1,1
-access_the_user_wants_an_teacher_user,Teacher Access,model_the_user_wants_an_teacher,base.group_user,1,1,1,1
-access_the_user_wants_an_school_class_user,School Class Access,model_the_user_wants_an_school_class,base.group_user,1,1,1,1
-access_the_user_wants_an_course_user,Course Access,model_the_user_wants_an_course,base.group_user,1,1,1,1
-access_the_user_wants_an_grade_user,Grade Access,model_the_user_wants_an_grade,base.group_user,1,1,1,1
-access_the_user_wants_an_schedule_user,Schedule Entry Access,model_the_user_wants_an_schedule,base.group_user,1,1,1,1

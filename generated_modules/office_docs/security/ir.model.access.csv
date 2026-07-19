@@ -1,2 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_office_document_user,Stores document details and attachments with status tracking. Access,model_office_document,base.group_user,1,1,1,1

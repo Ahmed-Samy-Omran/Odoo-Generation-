@@ -18,6 +18,7 @@ from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
 from app.services.git_deploy_service import GitDeployService
 from app.services.rag_service import RAGService
+from app.services.supabase_service import supabase_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -47,6 +48,24 @@ ai_service = AIService()
 rag_service = RAGService()
 
 
+def _persist_job_to_supabase(job_id: str, job_data: dict) -> None:
+    if not supabase_service.is_enabled():
+        return
+    try:
+        supabase_service.upsert_generation_job(
+            job_id=job_id,
+            status=job_data.get("status", "pending"),
+            progress=int(job_data.get("progress", 0)),
+            message=job_data.get("message", ""),
+            module_config=job_data.get("module_config"),
+            schema_preview=job_data.get("schema_preview"),
+            zip_url=job_data.get("download_url"),
+            github_url=job_data.get("github_url"),
+        )
+    except Exception as exc:
+        logger.exception("Supabase persistence failed for job %s: %s", job_id, exc)
+
+
 def _load_jobs() -> dict:
     if not os.path.exists(JOBS_STATE_PATH):
         return {}
@@ -72,6 +91,9 @@ def _save_jobs() -> None:
     except OSError:
         logger.exception("Failed to save job state")
 
+    for job_id, job_data in jobs.items():
+        _persist_job_to_supabase(job_id, job_data)
+
 
 jobs: dict = _load_jobs()
 
@@ -80,6 +102,7 @@ TEXT_EXTENSIONS = {".py", ".xml", ".csv", ".js", ".css", ".html", ".md", ".txt",
 
 class UserPrompt(BaseModel):
     prompt: str
+    job_id: Optional[str] = None
 
 
 class JobStatus(BaseModel):
@@ -95,9 +118,10 @@ class JobStatus(BaseModel):
     schema_preview: Optional[dict] = None
 
 
-def _new_job() -> str:
-    job_id = str(uuid.uuid4())
-    jobs[job_id] = {
+def _new_job(job_id: Optional[str] = None) -> str:
+    assigned_id = job_id or str(uuid.uuid4())
+
+    jobs[assigned_id] = {
         "status": "pending",
         "progress": 0,
         "message": "Queued",
@@ -112,7 +136,7 @@ def _new_job() -> str:
         "_zip_name": None,
     }
     _save_jobs()
-    return job_id
+    return assigned_id
 
 
 def _update_job(job_id: str, **kwargs):
@@ -293,12 +317,20 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
 
     jobs[job_id]["_zip_path"] = zip_path
     jobs[job_id]["_zip_name"] = zip_name
+
+    zip_url = None
+    try:
+        if supabase_service.is_enabled():
+            zip_url = supabase_service.upload_zip("modules", zip_path, zip_name)
+    except Exception as exc:
+        logger.exception("ZIP upload to Supabase failed: %s", exc)
+
     _update_job(
         job_id,
         status="done",
         progress=100,
         message="Done! Your module is ready.",
-        download_url=f"/download/{job_id}",
+        download_url=zip_url or f"/download/{job_id}",
     )
 
 
@@ -324,6 +356,7 @@ async def _run_generate_module_job(job_id: str, payload: GeneratorPayload):
             job_id,
             progress=10,
             message="Schema ready — generating files...",
+            module_config=modules[0] if len(modules) == 1 else {"modules": modules},
             schema_preview=_build_schema_preview(modules),
         )
         await asyncio.sleep(0)
@@ -359,6 +392,7 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str):
             job_id,
             progress=55,
             message="AI finished — drawing system architecture...",
+            module_config=modules[0] if len(modules) == 1 else {"modules": modules},
             schema_preview=_build_schema_preview(modules),
         )
         await asyncio.sleep(0)
@@ -465,7 +499,39 @@ async def chat_requirements(request: ChatRequest):
 
     payload = [{"role": m.role, "content": m.content} for m in request.messages]
     try:
-        return await asyncio.to_thread(ai_service.chat_requirements, payload)
+        if request.job_id:
+            existing_job = supabase_service.get_generation_job(request.job_id)
+            current_chat = existing_job.get("chat_history") if existing_job else []
+            chat_history = current_chat or []
+            if not isinstance(chat_history, list):
+                chat_history = []
+            next_messages = [
+                {"role": item.role, "content": item.content}
+                for item in request.messages
+            ]
+            combined_chat = chat_history + next_messages
+            payload_for_ai = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in combined_chat]
+            if existing_job and existing_job.get("module_config"):
+                payload_for_ai.append({
+                    "role": "system",
+                    "content": "Current module configuration context:\n" + json.dumps(existing_job.get("module_config"), ensure_ascii=False),
+                })
+            response = await asyncio.to_thread(ai_service.chat_requirements, payload_for_ai)
+            supabase_service.upsert_generation_job(
+                job_id=request.job_id,
+                status=existing_job.get("status", "running") if existing_job else "running",
+                progress=existing_job.get("progress", 0) if existing_job else 0,
+                message=existing_job.get("message", "") if existing_job else "",
+                module_config=existing_job.get("module_config") if existing_job else None,
+                schema_preview=existing_job.get("schema_preview") if existing_job else None,
+                chat_history=combined_chat,
+            )
+        else:
+            response = await asyncio.to_thread(ai_service.chat_requirements, payload)
+
+        for item in request.messages:
+            supabase_service.insert_chat_message(None, item.role, item.content)
+        return response
     except Exception as exc:
         logger.exception("Chat failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -485,7 +551,8 @@ async def chat_requirements(request: ChatRequest):
     ),
 )
 async def generate_module(payload: GeneratorPayload):
-    job_id = _new_job()
+    provided_id = getattr(payload, 'job_id', None)
+    job_id = _new_job(provided_id)
     asyncio.create_task(_run_generate_module_job(job_id, payload))
     return _job_status_response(job_id)
 
@@ -502,9 +569,36 @@ async def generate_module(payload: GeneratorPayload):
     ),
 )
 async def analyze_requirements_and_generate(user_prompt: UserPrompt):
-    job_id = _new_job()
+    job_id = _new_job(user_prompt.job_id)
     asyncio.create_task(_run_analyze_requirements_job(job_id, user_prompt.prompt))
     return _job_status_response(job_id)
+
+
+@app.get("/history")
+async def get_history():
+    jobs_list = supabase_service.get_generation_jobs()
+    chat_list = supabase_service.get_chat_history()
+    # Deduplicate by project/module name: keep the latest entry for each project
+    deduped = []
+    seen = set()
+    for job in jobs_list:
+        module_name = None
+        mc = job.get("module_config") or {}
+        if isinstance(mc, dict):
+            module_name = mc.get("module_name")
+            if not module_name and isinstance(mc.get("modules"), list) and mc.get("modules"):
+                first = mc.get("modules")[0]
+                if isinstance(first, dict):
+                    module_name = first.get("module_name")
+        key = module_name or job.get("job_id")
+        if key and key not in seen:
+            seen.add(key)
+            deduped.append(job)
+
+    return {
+        "jobs": deduped,
+        "chat_history": chat_list,
+    }
 
 
 @app.get(
@@ -523,6 +617,34 @@ async def get_job_status(job_id: str):
     if job_id not in jobs:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     return _job_status_response(job_id)
+
+
+@app.get("/job/{job_id}/restore")
+async def restore_job(job_id: str):
+    job_data = supabase_service.get_generation_job(job_id)
+    if not job_data:
+        if job_id not in jobs:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        job_data = {
+            "job_id": job_id,
+            "chat_history": [],
+            "module_config": None,
+            "status": jobs[job_id].get("status", "pending"),
+            "progress": jobs[job_id].get("progress", 0),
+            "message": jobs[job_id].get("message", ""),
+        }
+
+    module_config = job_data.get("module_config")
+    chat_history = job_data.get("chat_history") or []
+    return {
+        "job_id": job_id,
+        "status": job_data.get("status") or jobs.get(job_id, {}).get("status", "pending"),
+        "progress": job_data.get("progress") or jobs.get(job_id, {}).get("progress", 0),
+        "message": job_data.get("message") or jobs.get(job_id, {}).get("message", ""),
+        "chat_history": chat_history,
+        "module_config": module_config,
+        "schema_preview": job_data.get("schema_preview") or jobs.get(job_id, {}).get("schema_preview"),
+    }
 
 
 @app.get(

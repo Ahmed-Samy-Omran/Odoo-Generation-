@@ -1,3 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_product_product_user,Manage products in stock. Access,model_product_product,base.group_user,1,1,1,1
-access_stock_move_user,Track stock movements (in/out). Access,model_stock_move,base.group_user,1,1,1,1

@@ -113,6 +113,7 @@ class ModuleConfig(BaseModel):
 
 class GeneratorPayload(BaseModel):
     modules: List[ModuleConfig]
+    job_id: Optional[str] = None
 
 
 class ChatMessage(BaseModel):
@@ -122,6 +123,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    job_id: Optional[str] = None
 
 
 class ChatResponse(BaseModel):

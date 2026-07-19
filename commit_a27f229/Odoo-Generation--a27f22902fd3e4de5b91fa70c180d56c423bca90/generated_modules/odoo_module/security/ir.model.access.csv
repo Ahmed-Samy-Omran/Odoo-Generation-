@@ -1,5 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_odoo_module_membership_plan_user,Membership Plan Access,model_odoo_module_membership_plan,base.group_user,1,1,1,1
-access_odoo_module_gym_member_user,Gym Member Access,model_odoo_module_gym_member,base.group_user,1,1,1,1
-access_odoo_module_gym_trainer_user,Gym Trainer Access,model_odoo_module_gym_trainer,base.group_user,1,1,1,1
-access_odoo_module_gym_class_user,Gym Class Access,model_odoo_module_gym_class,base.group_user,1,1,1,1

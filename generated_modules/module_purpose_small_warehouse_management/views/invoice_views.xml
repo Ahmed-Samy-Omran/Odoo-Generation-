@@ -1,0 +1,44 @@
+<odoo>
+    <data>
+        <!-- Tree View for Handles purchase/sales invoices related to products. -->
+        <record id="invoice_tree_view" model="ir.ui.view">
+            <field name="name">invoice.tree</field>
+            <field name="model">invoice</field>
+            <field name="arch" type="xml">
+                <tree>
+                    <field name="name"/>
+                    <field name="partner_id"/>
+                    <field name="date_invoice"/>
+                    <field name="state"/>
+                    <field name="amount_total"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Form View for Handles purchase/sales invoices related to products. -->
+        <record id="invoice_form_view" model="ir.ui.view">
+            <field name="name">invoice.form</field>
+            <field name="model">invoice</field>
+            <field name="arch" type="xml">
+                <form>
+                    <sheet>
+                        <group>
+                            <field name="name"/>
+                            <field name="partner_id"/>
+                            <field name="date_invoice"/>
+                            <field name="state"/>
+                            <field name="payment_method"/>
+                            <field name="invoice_line_ids"/>
+                            <field name="amount_total"/>
+                        </group>
+                    </sheet>
+                </form>
+            </field>
+        </record>
+
+
+
+
+
+    </data>
+</odoo>

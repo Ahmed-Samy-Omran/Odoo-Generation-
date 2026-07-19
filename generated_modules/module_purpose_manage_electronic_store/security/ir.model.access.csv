@@ -1,6 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_product_product_user,Electronic products inventory management. Access,model_product_product,base.group_user,1,1,1,1
-access_product_category_user,Categories for electronic products. Access,model_product_category,base.group_user,1,1,1,1
-access_sale_order_user,Sales orders management. Access,model_sale_order,base.group_user,1,1,1,1
-access_sale_order_line_user,Lines of products in a sale order. Access,model_sale_order_line,base.group_user,1,1,1,1
-access_res_partner_user,Customer information (extended from base model). Access,model_res_partner,base.group_user,1,1,1,1
