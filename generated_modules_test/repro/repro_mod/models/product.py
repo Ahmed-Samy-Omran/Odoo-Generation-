@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 from odoo import models, fields, api
 
-class Patient(models.Model):
-    _name = 'patient'
+class Product(models.Model):
+    _name = 'product'
     _description = ''
 
     name = fields.Char(
-        string='None',
+        string='Name',
         required=True,
     )

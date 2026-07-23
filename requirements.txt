@@ -3,9 +3,9 @@ uvicorn[standard]
 jinja2
 pydantic
 python-dotenv
-google-genai
 openai
-httpx
+httpx<0.28
+supabase==2.8.0
 chromadb
 sentence-transformers==2.2.2
 transformers==4.30.2

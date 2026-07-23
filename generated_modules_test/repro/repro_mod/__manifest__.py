@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
 {
-    'name': 'dental_clinic',
+    'name': 'repro_mod',
     'version': '1.0',
     'category': 'Tools',
-    'summary': 'Dental clinic management',
+    'summary': 'test',
     'author': 'Generated Module',
     'depends': ['base'],
     'data': [
         'security/ir.model.access.csv',
-        'views/patient_views.xml',
+        'views/product_views.xml',
     ],
     'installable': True,
     'application': False,

@@ -1,4 +1,0 @@
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_fitzone_member_user,Gym Member Access,model_fitzone_member,base.group_user,1,1,1,1
-access_fitzone_plan_user,Subscription Plan Access,model_fitzone_plan,base.group_user,1,1,1,1
-access_fitzone_membership_user,Member Subscription Access,model_fitzone_membership,base.group_user,1,1,1,1

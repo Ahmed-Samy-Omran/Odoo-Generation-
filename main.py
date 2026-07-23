@@ -29,6 +29,19 @@ app = FastAPI(
     version="1.0.0",
 )
 
+@app.on_event("startup")
+async def startup_event() -> None:
+    global jobs
+    try:
+        synced_jobs = _load_jobs()
+        if synced_jobs:
+            jobs = synced_jobs
+        else:
+            jobs = {}
+        _save_jobs()
+    except Exception as exc:
+        logger.exception("Startup job sync failed: %s", exc)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -67,6 +80,35 @@ def _persist_job_to_supabase(job_id: str, job_data: dict) -> None:
 
 
 def _load_jobs() -> dict:
+    if supabase_service.is_enabled():
+        try:
+            rows = supabase_service.get_generation_jobs()
+            if rows:
+                normalized_jobs = {}
+                for row in rows:
+                    job_id = row.get("job_id")
+                    if not job_id:
+                        continue
+                    normalized_jobs[job_id] = {
+                        "status": row.get("status") or "pending",
+                        "progress": int(row.get("progress", 0) or 0),
+                        "message": row.get("message", ""),
+                        "started_at": row.get("started_at") or time.time(),
+                        "estimated_total_sec": row.get("estimated_total_sec"),
+                        "download_url": row.get("download_url") or row.get("zip_url"),
+                        "github_url": row.get("github_url"),
+                        "error": row.get("error"),
+                        "schema_preview": row.get("schema_preview"),
+                        "module_config": row.get("module_config"),
+                        "chat_history": row.get("chat_history"),
+                        "_module_paths": [],
+                        "_zip_path": None,
+                        "_zip_name": None,
+                    }
+                return normalized_jobs
+        except Exception as exc:
+            logger.exception("Failed to load jobs from Supabase: %s", exc)
+
     if not os.path.exists(JOBS_STATE_PATH):
         return {}
 
@@ -105,6 +147,11 @@ class UserPrompt(BaseModel):
     job_id: Optional[str] = None
 
 
+class ModuleConfigSyncRequest(BaseModel):
+    module_config: Optional[dict] = None
+    schema_preview: Optional[dict] = None
+
+
 class JobStatus(BaseModel):
     job_id: str
     status: str
@@ -131,6 +178,7 @@ def _new_job(job_id: Optional[str] = None) -> str:
         "github_url": None,
         "error": None,
         "schema_preview": None,
+        "module_config": None,
         "_module_paths": [],
         "_zip_path": None,
         "_zip_name": None,
@@ -143,6 +191,38 @@ def _update_job(job_id: str, **kwargs):
     if job_id in jobs:
         jobs[job_id].update(kwargs)
         _save_jobs()
+
+
+def _ensure_job_loaded(job_id: str) -> Optional[dict]:
+    if job_id in jobs:
+        return jobs[job_id]
+
+    try:
+        job_data = supabase_service.get_generation_job(job_id)
+    except Exception as exc:
+        logger.exception("Failed to restore job %s from Supabase: %s", job_id, exc)
+        return None
+
+    if not job_data:
+        return None
+
+    jobs[job_id] = {
+        "status": job_data.get("status") or "pending",
+        "progress": int(job_data.get("progress", 0) or 0),
+        "message": job_data.get("message", ""),
+        "started_at": time.time(),
+        "estimated_total_sec": None,
+        "download_url": job_data.get("download_url") or job_data.get("zip_url"),
+        "github_url": job_data.get("github_url"),
+        "error": job_data.get("error"),
+        "schema_preview": job_data.get("schema_preview"),
+        "module_config": job_data.get("module_config"),
+        "_module_paths": [],
+        "_zip_path": None,
+        "_zip_name": None,
+    }
+    _save_jobs()
+    return jobs[job_id]
 
 
 def _build_schema_preview(modules: list) -> dict:
@@ -266,72 +346,80 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
     total = len(modules)
     deploy_target = modules[0].get("git_deploy_target", "local_zip") if modules else "local_zip"
 
-    for i, config_data in enumerate(modules):
-        pct = ai_done_progress + int((85 - ai_done_progress) * i / total)
-        _update_job(
-            job_id,
-            progress=pct,
-            message=f"Generating module {i + 1}/{total}: {config_data.get('module_name', '?')}...",
-        )
-        await asyncio.sleep(0)
-        module_path = await asyncio.to_thread(generator.generate_module, config_data, OUTPUT_DIR)
-        module_paths.append(module_path)
-
-    jobs[job_id]["_module_paths"] = module_paths
-
-    if deploy_target == "github":
-        _update_job(job_id, progress=88, message="Pushing to GitHub... (this may take a moment)")
-        await asyncio.sleep(0)
-        try:
-            github_urls = await asyncio.to_thread(_deploy_to_github, module_paths)
+    try:
+        for i, config_data in enumerate(modules):
+            pct = ai_done_progress + int((85 - ai_done_progress) * i / total)
             _update_job(
                 job_id,
-                status="done",
-                progress=100,
-                message="Done! Module(s) pushed to GitHub.",
-                github_url=", ".join(github_urls),
+                progress=pct,
+                message=f"Generating module {i + 1}/{total}: {config_data.get('module_name', '?')}...",
             )
-        except EnvironmentError as exc:
-            err = f"GitHub config error: {exc}"
-            _update_job(job_id, status="error", progress=0, message=err, error=err)
+            await asyncio.sleep(0)
+            module_path = await asyncio.to_thread(generator.generate_module, config_data, OUTPUT_DIR)
+            module_paths.append(module_path)
+
+        jobs[job_id]["_module_paths"] = module_paths
+
+        if deploy_target == "github":
+            _update_job(job_id, progress=88, message="Pushing to GitHub... (this may take a moment)")
+            await asyncio.sleep(0)
+            try:
+                github_urls = await asyncio.to_thread(_deploy_to_github, module_paths)
+                _update_job(
+                    job_id,
+                    status="done",
+                    progress=100,
+                    message="Done! Module(s) pushed to GitHub.",
+                    github_url=", ".join(github_urls),
+                )
+            except EnvironmentError as exc:
+                err = f"GitHub config error: {exc}"
+                _update_job(job_id, status="error", progress=0, message=err, error=err)
+            except Exception as exc:
+                logger.exception("GitHub deploy failed for job %s", job_id)
+                err = f"GitHub deploy failed: {exc}"
+                _update_job(job_id, status="error", progress=0, message=err, error=err)
+            return
+
+        _update_job(job_id, progress=92, message="Creating ZIP archive...")
+        await asyncio.sleep(0)
+
+        zip_name = (
+            f"{modules[0].get('module_name', 'custom_module')}_batch.zip"
+            if len(modules) > 1
+            else f"{modules[0].get('module_name', 'custom_module')}.zip"
+        )
+        zip_path = os.path.join(OUTPUT_DIR, zip_name)
+        await asyncio.to_thread(ZipHandler.create_batch_zip, module_paths, zip_path)
+
+        if not os.path.exists(zip_path):
+            err = "Failed to create ZIP file"
+            _update_job(job_id, status="error", message=err, error=err)
+            return
+
+        jobs[job_id]["_zip_path"] = zip_path
+        jobs[job_id]["_zip_name"] = zip_name
+
+        zip_url = None
+        try:
+            if supabase_service.is_enabled():
+                zip_url = supabase_service.upload_zip("modules", zip_path, zip_name)
         except Exception as exc:
-            logger.exception("GitHub deploy failed for job %s", job_id)
-            err = f"GitHub deploy failed: {exc}"
-            _update_job(job_id, status="error", progress=0, message=err, error=err)
-        return
+            logger.exception("ZIP upload to Supabase failed: %s", exc)
 
-    _update_job(job_id, progress=92, message="Creating ZIP archive...")
-    await asyncio.sleep(0)
-
-    zip_name = (
-        f"{modules[0].get('module_name', 'custom_module')}_batch.zip"
-        if len(modules) > 1
-        else f"{modules[0].get('module_name', 'custom_module')}.zip"
-    )
-    zip_path = os.path.join(OUTPUT_DIR, zip_name)
-    await asyncio.to_thread(ZipHandler.create_batch_zip, module_paths, zip_path)
-
-    if not os.path.exists(zip_path):
-        _update_job(job_id, status="error", message="Failed to create ZIP file", error="Failed to create ZIP file")
-        return
-
-    jobs[job_id]["_zip_path"] = zip_path
-    jobs[job_id]["_zip_name"] = zip_name
-
-    zip_url = None
-    try:
-        if supabase_service.is_enabled():
-            zip_url = supabase_service.upload_zip("modules", zip_path, zip_name)
+        _update_job(
+            job_id,
+            status="done",
+            progress=100,
+            message="Done! Your module is ready.",
+            download_url=zip_url or f"/download/{job_id}",
+        )
     except Exception as exc:
-        logger.exception("ZIP upload to Supabase failed: %s", exc)
-
-    _update_job(
-        job_id,
-        status="done",
-        progress=100,
-        message="Done! Your module is ready.",
-        download_url=zip_url or f"/download/{job_id}",
-    )
+        logger.exception("Generation pipeline failed for job %s", job_id)
+        err = str(exc).strip() or "Generation failed"
+        if not err.lower().startswith(("generation failed", "zip", "module generation")):
+            err = f"Generation failed: {err}"
+        _update_job(job_id, status="error", progress=0, message=err, error=err)
 
 
 async def _run_generate_module_job(job_id: str, payload: GeneratorPayload):
@@ -574,6 +662,32 @@ async def analyze_requirements_and_generate(user_prompt: UserPrompt):
     return _job_status_response(job_id)
 
 
+@app.api_route("/job/{job_id}/sync-config", methods=["POST", "PATCH"])
+async def sync_job_config(job_id: str, payload: ModuleConfigSyncRequest):
+    restored_job = _ensure_job_loaded(job_id)
+    if not restored_job:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    jobs[job_id]["module_config"] = payload.module_config
+    jobs[job_id]["schema_preview"] = payload.schema_preview or jobs[job_id].get("schema_preview")
+    jobs[job_id]["message"] = "Changes synced to cloud successfully"
+    _save_jobs()
+
+    if supabase_service.is_enabled():
+        supabase_service.update_generation_job(
+            job_id,
+            module_config=payload.module_config,
+            schema_preview=payload.schema_preview or jobs[job_id].get("schema_preview"),
+            message=jobs[job_id]["message"],
+        )
+
+    return {
+        "job_id": job_id,
+        "status": "ok",
+        "message": jobs[job_id]["message"],
+    }
+
+
 @app.get("/history")
 async def get_history():
     jobs_list = supabase_service.get_generation_jobs()
@@ -634,16 +748,17 @@ async def restore_job(job_id: str):
             "message": jobs[job_id].get("message", ""),
         }
 
-    module_config = job_data.get("module_config")
+    local_job = jobs.get(job_id, {})
+    module_config = local_job.get("module_config") if local_job.get("module_config") is not None else job_data.get("module_config")
     chat_history = job_data.get("chat_history") or []
     return {
         "job_id": job_id,
-        "status": job_data.get("status") or jobs.get(job_id, {}).get("status", "pending"),
-        "progress": job_data.get("progress") or jobs.get(job_id, {}).get("progress", 0),
-        "message": job_data.get("message") or jobs.get(job_id, {}).get("message", ""),
+        "status": local_job.get("status") or job_data.get("status") or "pending",
+        "progress": local_job.get("progress") if local_job.get("progress") is not None else job_data.get("progress") or 0,
+        "message": local_job.get("message") if local_job.get("message") is not None else job_data.get("message") or "",
         "chat_history": chat_history,
         "module_config": module_config,
-        "schema_preview": job_data.get("schema_preview") or jobs.get(job_id, {}).get("schema_preview"),
+        "schema_preview": local_job.get("schema_preview") if local_job.get("schema_preview") is not None else job_data.get("schema_preview"),
     }
 
 

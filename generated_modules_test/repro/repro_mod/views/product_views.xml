@@ -1,9 +1,9 @@
 <odoo>
     <data>
-        <!-- Tree View for  -->
-        <record id="patient_tree_view" model="ir.ui.view">
-            <field name="name">patient.tree</field>
-            <field name="model">patient</field>
+        <!-- Tree View for Product -->
+        <record id="product_tree_view" model="ir.ui.view">
+            <field name="name">product.tree</field>
+            <field name="model">product</field>
             <field name="arch" type="xml">
                 <tree>
                     <field name="name"/>
@@ -11,10 +11,10 @@
             </field>
         </record>
 
-        <!-- Form View for  -->
-        <record id="patient_form_view" model="ir.ui.view">
-            <field name="name">patient.form</field>
-            <field name="model">patient</field>
+        <!-- Form View for Product -->
+        <record id="product_form_view" model="ir.ui.view">
+            <field name="name">product.form</field>
+            <field name="model">product</field>
             <field name="arch" type="xml">
                 <form>
                     <sheet>
