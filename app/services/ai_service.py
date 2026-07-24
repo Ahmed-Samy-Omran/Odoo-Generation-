@@ -200,7 +200,8 @@ class AIService:
             base_url += '/'
         return OpenAI(api_key=provider["key"], base_url=base_url)
 
-    def _call_provider(self, provider: Dict[str, Any], prompt: str) -> str:
+    def _call_provider(self, provider: Dict[str, Any], prompt: str, odoo_version: Optional[str] = None) -> str:
+        version = (odoo_version or "17.0").strip() or "17.0"
         client = self._get_client(provider)
         response = client.chat.completions.create(
             model=provider["model"],
@@ -208,7 +209,10 @@ class AIService:
                 {
                     "role": "system",
                     "content": (
-                        "You are a senior Odoo developer. Carefully analyze the request, then generate only valid JSON conforming to the module schema. "
+                        f"You are a senior Odoo developer targeting Odoo {version}. "
+                        f"Always follow the official Odoo {version} coding guidelines. Pay special attention to the manifest.py structure, view inheritance, and the OWL framework for versions 16.0 and 17.0. "
+                        "For Odoo 17, ensure the use of the latest web client standards. "
+                        "Carefully analyze the request, then generate only valid JSON conforming to the module schema. "
                         "Do not include markdown, comments, or any text outside the JSON. "
                         "If GitHub deployment is requested, set git_deploy_target to 'github'; otherwise use 'local_zip'."
                     ),
@@ -330,8 +334,8 @@ class AIService:
         except json.JSONDecodeError as e:
             raise ValueError(f"Chat response was not valid JSON: {e}")
 
-    def analyze_requirements(self, user_prompt: str) -> GeneratorPayload:
-        prompt = self._build_prompt(user_prompt)
+    def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None) -> GeneratorPayload:
+        prompt = self._build_prompt(user_prompt, odoo_version)
 
         for provider in self.providers:
             if not provider["key"]:
@@ -339,7 +343,7 @@ class AIService:
 
             try:
                 logger.info(f"Attempting to use gateway: {provider['name']}")
-                content = self._call_provider(provider, prompt)
+                content = self._call_provider(provider, prompt, odoo_version)
                 return self._parse_response(content)
 
             except Exception as e:
@@ -348,8 +352,9 @@ class AIService:
 
         raise Exception("Fatal Error: All AI gateways failed. Please check your keys, quotas, and internet connection.")
 
-    def _build_prompt(self, user_prompt: str) -> str:
+    def _build_prompt(self, user_prompt: str, odoo_version: Optional[str] = None) -> str:
         """Standardized prompt with schema and a concrete example."""
+        version = (odoo_version or "17.0").strip() or "17.0"
         rag_context = self.rag_service._format_search_results(self.rag_service.search(user_prompt, top_k=3))
         return f"""Analyze the user request in two steps.
 1. First, build a concise plan for the module, including models, views, menus, security groups and deployment target.
@@ -359,6 +364,8 @@ Important:
 - Do not include markdown, comments, or any explanation outside the JSON.
 - If GitHub deployment is requested, set "git_deploy_target": "github".
 - Otherwise set "git_deploy_target": "local_zip".
+- Always follow the official Odoo {version} coding guidelines. Pay special attention to the manifest.py structure, view inheritance, and the OWL framework for versions 16.0 and 17.0.
+- For Odoo 17, ensure the use of the latest web client standards.
 - Always return valid JSON parseable by json.loads().
 - Prioritize the provided local Odoo reference context when the request concerns standard Odoo behavior, views, models, or XML structure.
 

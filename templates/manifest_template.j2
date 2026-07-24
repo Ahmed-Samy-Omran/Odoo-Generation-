@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': '{{ module_name }}',
-    'version': '1.0',
+    'version': '{{ odoo_version | default("17.0") }}',
     'category': 'Tools',
     'summary': '{{ module_description | default("Custom Module") }}',
     'author': 'Generated Module',

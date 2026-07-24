@@ -103,6 +103,7 @@ class ModuleConfig(BaseModel):
     module_name: str
     module_description: Optional[str] = ""
     depends: Optional[List[str]] = ["base"]
+    odoo_version: Optional[str] = None
     models: List[ModelDefinition]
     actions: Optional[List[ActionModel]] = None
     menus: Optional[List[MenuModel]] = None
@@ -114,6 +115,7 @@ class ModuleConfig(BaseModel):
 class GeneratorPayload(BaseModel):
     modules: List[ModuleConfig]
     job_id: Optional[str] = None
+    odoo_version: Optional[str] = None
 
 
 class ChatMessage(BaseModel):

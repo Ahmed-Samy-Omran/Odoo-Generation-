@@ -200,6 +200,7 @@ class OdooModuleGenerator:
             module_name=config.get("module_name", "custom_module"),
             module_description=config.get("module_description", ""),
             depends=config.get("depends", ["base"]),
+            odoo_version=config.get("odoo_version") or config.get("version") or "17.0",
             data_files=data_files
         )
 

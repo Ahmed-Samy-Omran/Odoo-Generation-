@@ -159,11 +159,13 @@ TEXT_EXTENSIONS = {".py", ".xml", ".csv", ".js", ".css", ".html", ".md", ".txt",
 class UserPrompt(BaseModel):
     prompt: str
     job_id: Optional[str] = None
+    odoo_version: Optional[str] = None
 
 
 class ModuleConfigSyncRequest(BaseModel):
     module_config: Optional[dict] = None
     schema_preview: Optional[dict] = None
+    odoo_version: Optional[str] = None
 
 
 class JobStatus(BaseModel):
@@ -616,6 +618,11 @@ async def _run_generate_module_job(job_id: str, payload: GeneratorPayload):
             _update_job(job_id, status="error", progress=0, message=err, error=err)
             return
 
+        version = (payload_data.get("odoo_version") or "17.0").strip() or "17.0"
+        for module in modules:
+            if isinstance(module, dict):
+                module.setdefault("odoo_version", version)
+
         _update_job(
             job_id,
             progress=10,
@@ -632,7 +639,7 @@ async def _run_generate_module_job(job_id: str, payload: GeneratorPayload):
         _update_job(job_id, status="error", progress=0, message=err_msg, error=err_msg)
 
 
-async def _run_analyze_requirements_job(job_id: str, user_prompt: str):
+async def _run_analyze_requirements_job(job_id: str, user_prompt: str, odoo_version: Optional[str] = None):
     try:
         _update_job(
             job_id,
@@ -643,7 +650,7 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str):
         )
         await asyncio.sleep(0)
 
-        payload = await asyncio.to_thread(ai_service.analyze_requirements, user_prompt)
+        payload = await asyncio.to_thread(ai_service.analyze_requirements, user_prompt, odoo_version)
 
         payload_data = payload.model_dump()
         modules = payload_data.get("modules", [])
@@ -651,6 +658,11 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str):
             err = "No modules analyzed from the prompt"
             _update_job(job_id, status="error", progress=0, message=err, error=err)
             return
+
+        version = (odoo_version or payload_data.get("odoo_version") or "17.0").strip() or "17.0"
+        for module in modules:
+            if isinstance(module, dict):
+                module.setdefault("odoo_version", version)
 
         _update_job(
             job_id,
@@ -834,7 +846,7 @@ async def generate_module(payload: GeneratorPayload):
 )
 async def analyze_requirements_and_generate(user_prompt: UserPrompt):
     job_id = _new_job(user_prompt.job_id)
-    asyncio.create_task(_run_analyze_requirements_job(job_id, user_prompt.prompt))
+    asyncio.create_task(_run_analyze_requirements_job(job_id, user_prompt.prompt, user_prompt.odoo_version))
     return _job_status_response(job_id)
 
 
@@ -846,6 +858,8 @@ async def sync_job_config(job_id: str, payload: ModuleConfigSyncRequest):
 
     jobs[job_id]["module_config"] = payload.module_config
     jobs[job_id]["schema_preview"] = payload.schema_preview or jobs[job_id].get("schema_preview")
+    if payload.odoo_version:
+        jobs[job_id]["odoo_version"] = payload.odoo_version
     jobs[job_id]["message"] = "Changes synced to cloud successfully"
     _save_jobs()
 
