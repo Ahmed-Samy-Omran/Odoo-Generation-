@@ -6,6 +6,9 @@ import json
 import asyncio
 import logging
 import traceback
+import shutil
+import io
+import zipfile
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -80,6 +83,14 @@ def _persist_job_to_supabase(job_id: str, job_data: dict) -> None:
 
 
 def _load_jobs() -> dict:
+    local_jobs = {}
+    if os.path.exists(JOBS_STATE_PATH):
+        try:
+            with open(JOBS_STATE_PATH, "r", encoding="utf-8") as f:
+                local_jobs = json.load(f)
+        except Exception:
+            local_jobs = {}
+
     if supabase_service.is_enabled():
         try:
             rows = supabase_service.get_generation_jobs()
@@ -89,6 +100,7 @@ def _load_jobs() -> dict:
                     job_id = row.get("job_id")
                     if not job_id:
                         continue
+                    local_job = local_jobs.get(job_id, {})
                     normalized_jobs[job_id] = {
                         "status": row.get("status") or "pending",
                         "progress": int(row.get("progress", 0) or 0),
@@ -101,10 +113,12 @@ def _load_jobs() -> dict:
                         "schema_preview": row.get("schema_preview"),
                         "module_config": row.get("module_config"),
                         "chat_history": row.get("chat_history"),
-                        "_module_paths": [],
-                        "_zip_path": None,
-                        "_zip_name": None,
+                        "_module_paths": local_job.get("_module_paths") or [],
+                        "_zip_path": local_job.get("_zip_path"),
+                        "_zip_name": local_job.get("_zip_name"),
                     }
+                # Supabase is the source of truth: only include jobs present in Supabase.
+                # Preserve local artifact paths when available so we can serve files without re-downloading.
                 return normalized_jobs
         except Exception as exc:
             logger.exception("Failed to load jobs from Supabase: %s", exc)
@@ -329,6 +343,168 @@ def _collect_files_from_paths(module_paths: list) -> list:
                     continue
                 files.append({"name": filename, "path": path, "content": content})
     return sorted(files, key=lambda x: x["path"])
+
+
+def _collect_files_from_zip(zip_path: str) -> list:
+    files = []
+    try:
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            for name in zf.namelist():
+                if name.endswith("/"):
+                    continue
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in TEXT_EXTENSIONS:
+                    continue
+                try:
+                    with zf.open(name) as fh:
+                        content = fh.read().decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                files.append({"name": os.path.basename(name), "path": name.replace("\\", "/"), "content": content})
+    except Exception:
+        logger.exception("Failed to collect files from zip: %s", zip_path)
+    return sorted(files, key=lambda x: x["path"])
+
+
+def _collect_files_from_zip_url(url: str) -> list:
+    files = []
+    try:
+        response = httpx.get(url, timeout=30.0)
+        response.raise_for_status()
+        with zipfile.ZipFile(io.BytesIO(response.content), "r") as zf:
+            for name in zf.namelist():
+                if name.endswith("/"):
+                    continue
+                ext = os.path.splitext(name)[1].lower()
+                if ext not in TEXT_EXTENSIONS:
+                    continue
+                try:
+                    with zf.open(name) as fh:
+                        content = fh.read().decode("utf-8", errors="replace")
+                except Exception:
+                    continue
+                files.append({"name": os.path.basename(name), "path": name.replace("\\", "/"), "content": content})
+    except Exception:
+        logger.exception("Failed to collect files from zip URL: %s", url)
+    return sorted(files, key=lambda x: x["path"])
+
+
+def _derive_zip_name_from_url(download_url: str, job_id: str) -> str:
+    if not download_url:
+        return f"{job_id}.zip"
+    zip_name = os.path.basename(download_url.split("?")[0]) or f"{job_id}.zip"
+    if not zip_name.lower().endswith(".zip"):
+        zip_name = f"{zip_name}.zip"
+    return zip_name
+
+
+def _restore_job_artifacts(job_id: str) -> bool:
+    job = jobs.get(job_id)
+    if not job:
+        return False
+
+    module_paths = job.get("_module_paths") or []
+    for module_path in module_paths:
+        if module_path and os.path.exists(module_path):
+            return True
+
+    zip_path = _get_zip_path_for_job(job)
+    if zip_path:
+        return True
+
+    download_url = job.get("download_url")
+    if download_url:
+        return _save_job_zip_from_url(job_id, download_url)
+
+    return False
+
+
+def _get_zip_path_for_job(job: dict) -> Optional[str]:
+    zip_path = job.get("_zip_path")
+    if zip_path and os.path.exists(zip_path):
+        return zip_path
+
+    zip_name = job.get("_zip_name")
+    if zip_name:
+        candidate = os.path.join(OUTPUT_DIR, zip_name)
+        if os.path.exists(candidate):
+            return candidate
+    return None
+
+
+def _save_job_zip_from_url(job_id: str, download_url: str) -> bool:
+    try:
+        if download_url.startswith("/"):
+            download_url = f"http://127.0.0.1:8000{download_url}"
+
+        response = httpx.get(download_url, timeout=30.0)
+        response.raise_for_status()
+
+        zip_name = _derive_zip_name_from_url(download_url, job_id)
+
+        zip_path = os.path.join(OUTPUT_DIR, zip_name)
+        with open(zip_path, "wb") as f:
+            f.write(response.content)
+
+        extract_dir = os.path.join(OUTPUT_DIR, f"{job_id}_extracted")
+        if os.path.exists(extract_dir):
+            shutil.rmtree(extract_dir)
+        os.makedirs(extract_dir, exist_ok=True)
+
+        with zipfile.ZipFile(zip_path, "r") as zf:
+            zf.extractall(extract_dir)
+
+        module_paths = []
+        for entry in sorted(os.listdir(extract_dir)):
+            entry_path = os.path.join(extract_dir, entry)
+            if os.path.isdir(entry_path):
+                module_paths.append(entry_path)
+        if not module_paths:
+            module_paths = [extract_dir]
+
+        jobs[job_id]["_zip_path"] = zip_path
+        jobs[job_id]["_zip_name"] = zip_name
+        jobs[job_id]["_module_paths"] = module_paths
+        _save_jobs()
+        return True
+    except Exception:
+        logger.exception("Failed to download and restore ZIP for job %s from %s", job_id, download_url)
+        return False
+
+
+def _delete_job_artifacts(job_id: str) -> None:
+    job = jobs.get(job_id)
+    if not job:
+        return
+
+    zip_path = job.get("_zip_path")
+    if zip_path and os.path.exists(zip_path):
+        try:
+            os.remove(zip_path)
+        except OSError:
+            logger.exception("Failed to remove ZIP file for job %s", job_id)
+
+    module_paths = job.get("_module_paths") or []
+    for module_path in module_paths:
+        if module_path and os.path.exists(module_path):
+            try:
+                shutil.rmtree(module_path)
+            except OSError:
+                logger.exception("Failed to remove module path for job %s: %s", job_id, module_path)
+
+
+def _delete_job(job_id: str) -> bool:
+    if job_id in jobs:
+        _delete_job_artifacts(job_id)
+        try:
+            del jobs[job_id]
+            _save_jobs()
+        except Exception:
+            logger.exception("Failed to delete job from memory: %s", job_id)
+            return False
+        return True
+
+    return False
 
 
 def _deploy_to_github(module_paths: list) -> list[str]:
@@ -735,31 +911,46 @@ async def get_job_status(job_id: str):
 
 @app.get("/job/{job_id}/restore")
 async def restore_job(job_id: str):
-    job_data = supabase_service.get_generation_job(job_id)
-    if not job_data:
-        if job_id not in jobs:
-            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
-        job_data = {
-            "job_id": job_id,
-            "chat_history": [],
-            "module_config": None,
-            "status": jobs[job_id].get("status", "pending"),
-            "progress": jobs[job_id].get("progress", 0),
-            "message": jobs[job_id].get("message", ""),
-        }
+    local_job = _ensure_job_loaded(job_id) or {}
+    job_data = None
+    if supabase_service.is_enabled():
+        job_data = supabase_service.get_generation_job(job_id)
 
-    local_job = jobs.get(job_id, {})
-    module_config = local_job.get("module_config") if local_job.get("module_config") is not None else job_data.get("module_config")
-    chat_history = job_data.get("chat_history") or []
+    if not local_job and not job_data:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    module_config = local_job.get("module_config") if local_job.get("module_config") is not None else (job_data.get("module_config") if job_data else None)
+    chat_history = (job_data.get("chat_history") if job_data else []) or []
     return {
         "job_id": job_id,
-        "status": local_job.get("status") or job_data.get("status") or "pending",
-        "progress": local_job.get("progress") if local_job.get("progress") is not None else job_data.get("progress") or 0,
-        "message": local_job.get("message") if local_job.get("message") is not None else job_data.get("message") or "",
+        "status": local_job.get("status") or (job_data.get("status") if job_data else None) or "pending",
+        "progress": local_job.get("progress") if local_job.get("progress") is not None else (job_data.get("progress") if job_data else 0) or 0,
+        "message": local_job.get("message") if local_job.get("message") is not None else (job_data.get("message") if job_data else "") or "",
         "chat_history": chat_history,
         "module_config": module_config,
-        "schema_preview": local_job.get("schema_preview") if local_job.get("schema_preview") is not None else job_data.get("schema_preview"),
+        "schema_preview": local_job.get("schema_preview") if local_job.get("schema_preview") is not None else (job_data.get("schema_preview") if job_data else None),
     }
+
+@app.delete(
+    "/job/{job_id}",
+    summary="Delete a saved job and its generated artifacts",
+)
+async def delete_job(job_id: str):
+    if not supabase_service.is_enabled() and job_id not in jobs:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    supabase_deleted = True
+    if supabase_service.is_enabled():
+        supabase_deleted = supabase_service.delete_generation_job(job_id)
+
+    local_deleted = _delete_job(job_id)
+    if local_deleted:
+        _save_jobs()
+
+    if not local_deleted and not supabase_deleted:
+        raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    return {"status": "ok", "message": f"Job '{job_id}' deleted"}
 
 
 @app.get(
@@ -793,10 +984,22 @@ async def get_job_files(job_id: str):
     j = jobs[job_id]
     if j["status"] != "done":
         raise HTTPException(status_code=409, detail=f"Job is not done yet (status={j['status']})")
+
     module_paths = j.get("_module_paths") or []
-    if not module_paths:
-        raise HTTPException(status_code=404, detail="No generated files found for this job")
-    return {"files": _collect_files_from_paths(module_paths)}
+    if module_paths:
+        return {"files": _collect_files_from_paths(module_paths)}
+
+    if _restore_job_artifacts(job_id):
+        module_paths = j.get("_module_paths") or []
+        if module_paths:
+            return {"files": _collect_files_from_paths(module_paths)}
+        zip_path = _get_zip_path_for_job(j)
+        if zip_path:
+            files = _collect_files_from_zip(zip_path)
+            if files:
+                return {"files": files}
+
+    raise HTTPException(status_code=404, detail="No generated files found for this job")
 
 
 @app.get(
@@ -813,6 +1016,11 @@ async def download_result(job_id: str):
         raise HTTPException(status_code=400, detail=f"This job was deployed to GitHub: {j['github_url']}")
     zip_path = j.get("_zip_path")
     zip_name = j.get("_zip_name", "module.zip")
+    if not zip_path or not os.path.exists(zip_path):
+        download_url = j.get("download_url")
+        if download_url and _save_job_zip_from_url(job_id, download_url):
+            zip_path = _get_zip_path_for_job(j)
+            zip_name = j.get("_zip_name", zip_name)
     if not zip_path or not os.path.exists(zip_path):
         raise HTTPException(status_code=404, detail="ZIP file not found on server")
     return FileResponse(

@@ -57,6 +57,17 @@ class SupabaseService:
         except Exception as exc:
             logger.exception("Supabase job upsert failed: %s", exc)
 
+
+    def delete_generation_job(self, job_id: str) -> bool:
+        if not self.is_enabled():
+            return False
+        try:
+            self.client.table("generation_jobs").delete().eq("job_id", job_id).execute()
+            return True
+        except Exception as exc:
+            logger.exception("Supabase job delete failed: %s", exc)
+            return False
+
     def update_generation_job(self, job_id: str, **kwargs: Any) -> None:
         if not self.is_enabled():
             return
