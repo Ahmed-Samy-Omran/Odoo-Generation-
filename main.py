@@ -9,6 +9,7 @@ import traceback
 import shutil
 import io
 import zipfile
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
@@ -25,6 +26,8 @@ from app.services.supabase_service import supabase_service
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 app = FastAPI(
     title="Odoo AI Module Generator",
@@ -45,9 +48,15 @@ async def startup_event() -> None:
     except Exception as exc:
         logger.exception("Startup job sync failed: %s", exc)
 
+frontend_origins = []
+for raw_origin in os.getenv("FRONTEND_URL", "http://localhost:5173").split(","):
+    origin = raw_origin.strip()
+    if origin:
+        frontend_origins.append(origin)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=frontend_origins if frontend_origins else ["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1047,4 +1056,5 @@ async def download_result(job_id: str):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host="0.0.0.0", port=port)
