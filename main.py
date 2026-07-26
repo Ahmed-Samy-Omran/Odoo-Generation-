@@ -891,25 +891,11 @@ async def sync_job_config(job_id: str, payload: ModuleConfigSyncRequest):
 async def get_history():
     jobs_list = supabase_service.get_generation_jobs()
     chat_list = supabase_service.get_chat_history()
-    # Deduplicate by project/module name: keep the latest entry for each project
-    deduped = []
-    seen = set()
-    for job in jobs_list:
-        module_name = None
-        mc = job.get("module_config") or {}
-        if isinstance(mc, dict):
-            module_name = mc.get("module_name")
-            if not module_name and isinstance(mc.get("modules"), list) and mc.get("modules"):
-                first = mc.get("modules")[0]
-                if isinstance(first, dict):
-                    module_name = first.get("module_name")
-        key = module_name or job.get("job_id")
-        if key and key not in seen:
-            seen.add(key)
-            deduped.append(job)
 
+    # Return all jobs by job_id. Deletion is performed by job_id, so history
+    # should not collapse separate records with the same module name.
     return {
-        "jobs": deduped,
+        "jobs": jobs_list,
         "chat_history": chat_list,
     }
 
@@ -969,6 +955,9 @@ async def delete_job(job_id: str):
     local_deleted = _delete_job(job_id)
     if local_deleted:
         _save_jobs()
+
+    if supabase_service.is_enabled() and not supabase_deleted:
+        raise HTTPException(status_code=500, detail=f"Job '{job_id}' could not be deleted from remote history")
 
     if not local_deleted and not supabase_deleted:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
