@@ -518,13 +518,37 @@ def _delete_job(job_id: str) -> bool:
     return False
 
 
-def _deploy_to_github(module_paths: list) -> list[str]:
+def _deploy_to_github(module_paths: list, repository_urls: Optional[list[str]] = None) -> list[str]:
     git_service = GitDeployService()
     urls = []
-    for module_path in module_paths:
-        url = git_service.deploy(module_path)
+    for index, module_path in enumerate(module_paths):
+        repo_url = None
+        repo_name = None
+        if repository_urls and index < len(repository_urls):
+            repo_url = repository_urls[index]
+            if repo_url:
+                repo_name = repo_url.rstrip('/').split('/')[-1]
+                if repo_name.endswith('.git'):
+                    repo_name = repo_name[:-4]
+        url = git_service.deploy(module_path, repo_name=repo_name, owner=_extract_github_owner(repo_url) if repo_url else None)
         urls.append(url)
     return urls
+
+
+def _extract_github_owner(repository_url: Optional[str]) -> Optional[str]:
+    if not repository_url:
+        return None
+    try:
+        cleaned = repository_url.strip().rstrip('/')
+        parts = cleaned.split('/')
+        if len(parts) >= 2:
+            owner = parts[-2]
+            if owner.lower() == 'github.com':
+                return None
+            return owner
+    except Exception:
+        return None
+    return None
 
 
 async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int = 10):
@@ -548,10 +572,15 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
         jobs[job_id]["_module_paths"] = module_paths
 
         if deploy_target == "github":
+            repository_urls = [
+                module.get("repository_url")
+                for module in modules
+                if isinstance(module, dict)
+            ]
             _update_job(job_id, progress=88, message="Pushing to GitHub... (this may take a moment)")
             await asyncio.sleep(0)
             try:
-                github_urls = await asyncio.to_thread(_deploy_to_github, module_paths)
+                github_urls = await asyncio.to_thread(_deploy_to_github, module_paths, repository_urls)
                 _update_job(
                     job_id,
                     status="done",

@@ -70,9 +70,35 @@ class GitDeployService:
 
         self._owner = self.org or self.user
 
+    def _build_repo_name(self, module_path: str) -> str:
+        module_dir = Path(module_path)
+        repo_name = module_dir.name.replace(" ", "_").lower()
+        return repo_name
+
+    def _normalize_repo_name(self, repo_name: Optional[str]) -> str:
+        if not repo_name:
+            return ""
+
+        normalized = repo_name.strip().rstrip("/")
+        if not normalized:
+            return ""
+
+        if "://" in normalized:
+            normalized = normalized.split("/")[-1]
+        elif normalized.startswith("git@"):
+            normalized = normalized.split(":")[-1]
+            normalized = normalized.split("/")[-1]
+        else:
+            normalized = normalized.split("/")[-1]
+
+        if normalized.endswith(".git"):
+            normalized = normalized[:-4]
+
+        return normalized.replace(" ", "_").lower()
+
     # ── Public API ───────────────────────────────────────────────────────────
 
-    def deploy(self, module_path: str, repo_name: Optional[str] = None) -> str:
+    def deploy(self, module_path: str, repo_name: Optional[str] = None, owner: Optional[str] = None) -> str:
         """
         Create a GitHub repo (if it doesn't exist) and push every file in
         *module_path* to it.
@@ -80,6 +106,7 @@ class GitDeployService:
         Args:
             module_path : Absolute path to the generated Odoo module directory.
             repo_name   : Repository name to use. Defaults to the folder name.
+            owner       : GitHub owner/organization to target. Defaults to configured user/org.
 
         Returns:
             The HTML URL of the created/updated repository.
@@ -88,26 +115,26 @@ class GitDeployService:
         if not module_dir.is_dir():
             raise ValueError(f"Module path does not exist: {module_path}")
 
-        repo_name = repo_name or module_dir.name
-        # GitHub repo names can't have spaces
-        repo_name = repo_name.replace(" ", "_").lower()
+        repo_name = self._normalize_repo_name(repo_name or self._build_repo_name(str(module_dir)))
+        target_owner = (owner or self._owner).strip()
 
-        logger.info("Starting GitHub deployment → %s/%s", self._owner, repo_name)
+        logger.info("Starting GitHub deployment → %s/%s", target_owner, repo_name)
 
-        repo_url, default_branch = self._ensure_repo(repo_name)
-        self._push_directory(module_dir, repo_name, default_branch)
+        repo_url, default_branch = self._ensure_repo(repo_name, target_owner)
+        self._push_directory(module_dir, repo_name, default_branch, target_owner)
 
         logger.info("✅ Deployment complete: %s", repo_url)
         return repo_url
 
     # ── Private helpers ──────────────────────────────────────────────────────
 
-    def _ensure_repo(self, repo_name: str) -> tuple[str, str]:
+    def _ensure_repo(self, repo_name: str, owner: Optional[str] = None) -> tuple[str, str]:
         """
         Create the repo if it doesn't exist. Returns (html_url, default_branch).
         """
+        target_owner = (owner or self._owner).strip()
         # Check if repo already exists
-        check_url = f"{GITHUB_API}/repos/{self._owner}/{repo_name}"
+        check_url = f"{GITHUB_API}/repos/{target_owner}/{repo_name}"
         with httpx.Client(timeout=30) as client:
             r = client.get(check_url, headers=_headers(self.token))
 
@@ -117,7 +144,7 @@ class GitDeployService:
             return data["html_url"], data.get("default_branch", "main")
 
         # Create new repo
-        if self.org:
+        if target_owner and self.org and target_owner == self.org:
             create_url = f"{GITHUB_API}/orgs/{self.org}/repos"
         else:
             create_url = f"{GITHUB_API}/user/repos"
@@ -143,9 +170,10 @@ class GitDeployService:
         logger.info("Created repo: %s", data["html_url"])
         return data["html_url"], data.get("default_branch", "main")
 
-    def _get_file_sha(self, repo_name: str, file_path: str) -> Optional[str]:
+    def _get_file_sha(self, repo_name: str, file_path: str, owner: Optional[str] = None) -> Optional[str]:
         """Get the SHA of an existing file (needed for update commits)."""
-        url = f"{GITHUB_API}/repos/{self._owner}/{repo_name}/contents/{file_path}"
+        target_owner = (owner or self._owner).strip()
+        url = f"{GITHUB_API}/repos/{target_owner}/{repo_name}/contents/{file_path}"
         with httpx.Client(timeout=15) as client:
             r = client.get(url, headers=_headers(self.token))
         if r.status_code == 200:
@@ -153,14 +181,15 @@ class GitDeployService:
         return None
 
     def _push_file(self, repo_name: str, file_path_in_repo: str,
-                   content_bytes: bytes, branch: str) -> None:
+                   content_bytes: bytes, branch: str, owner: Optional[str] = None) -> None:
         """Create or update a single file via the GitHub Contents API."""
+        target_owner = (owner or self._owner).strip()
         url = (
-            f"{GITHUB_API}/repos/{self._owner}/{repo_name}"
+            f"{GITHUB_API}/repos/{target_owner}/{repo_name}"
             f"/contents/{file_path_in_repo}"
         )
         encoded = base64.b64encode(content_bytes).decode("utf-8")
-        sha = self._get_file_sha(repo_name, file_path_in_repo)
+        sha = self._get_file_sha(repo_name, file_path_in_repo, target_owner)
 
         payload: dict = {
             "message": f"Add {file_path_in_repo}",
@@ -180,7 +209,7 @@ class GitDeployService:
                 f"HTTP {r.status_code} — {r.text[:300]}"
             )
 
-    def _push_directory(self, directory: Path, repo_name: str, branch: str) -> None:
+    def _push_directory(self, directory: Path, repo_name: str, branch: str, owner: Optional[str] = None) -> None:
         """Walk the module directory and push every file to GitHub."""
         files = [p for p in directory.rglob("*") if p.is_file()]
         logger.info("Pushing %d files to GitHub...", len(files))
@@ -195,7 +224,7 @@ class GitDeployService:
 
             try:
                 content_bytes = file_path.read_bytes()
-                self._push_file(repo_name, repo_file_path, content_bytes, branch)
+                self._push_file(repo_name, repo_file_path, content_bytes, branch, owner)
                 logger.debug("Pushed: %s", repo_file_path)
             except Exception as exc:
                 logger.warning("Skipped %s: %s", repo_file_path, exc)

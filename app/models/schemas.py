@@ -111,6 +111,7 @@ class ModuleConfig(BaseModel):
     security_groups: Optional[List[SecurityGroupModel]] = None
     # New field for Git Deployment
     git_deploy_target: Optional[Literal["github", "local_zip"]] = "local_zip"
+    repository_url: Optional[str] = None
 
 class GeneratorPayload(BaseModel):
     modules: List[ModuleConfig]
