@@ -218,6 +218,16 @@ def _update_job(job_id: str, **kwargs):
         _save_jobs()
 
 
+def _stage_label(progress: int) -> str:
+    if progress <= 25:
+        return 'Analyzing Requirements'
+    if progress <= 50:
+        return 'Architecting Odoo Schema'
+    if progress <= 85:
+        return 'Generating Python & XML Code'
+    return 'Finalizing & Packaging Module'
+
+
 def _ensure_job_loaded(job_id: str) -> Optional[dict]:
     if job_id in jobs:
         return jobs[job_id]
@@ -321,11 +331,17 @@ def _job_status_response(job_id: str) -> dict:
     est = None
     if j["progress"] and j["progress"] < 100 and j.get("estimated_total_sec"):
         est = max(0.0, j["estimated_total_sec"] - elapsed)
+
+    progress = int(j["progress"])
+    message = j["message"]
+    if j["status"] not in ("error", "pending") and progress > 0:
+        message = _stage_label(progress)
+
     return {
         "job_id": job_id,
         "status": j["status"],
-        "progress": j["progress"],
-        "message": j["message"],
+        "progress": progress,
+        "message": message,
         "elapsed_sec": round(elapsed, 1),
         "estimated_remaining_sec": round(est, 1) if est is not None else None,
         "download_url": j["download_url"],
