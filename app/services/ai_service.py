@@ -303,8 +303,10 @@ class AIService:
                         "1. If the message is trivial (hi, ok, thanks, etc.), keep ready_to_generate: false.\n"
                         "2. Ask for: Module Name, Models, Fields, and special features.\n"
                         "3. Set ready_to_generate: true ONLY when requirements are complete.\n"
-                        "UNDO ALL THA\n"
-                        "4. When ready, provide a technical summary in 'requirements_summary'.\n"
+                        "4. Format every reply with clean Markdown. Use headings like ### for main sections, backticks for technical Odoo names, clean bullet points or numbered lists, and bold only the most critical terms. Technical names such as model names and field names must always be wrapped in backticks, even in Arabic replies.\n"
+                        "5. Keep one blank line between sections so the response stays breathable and easy to scan.\n"
+                        "6. When the conversation is in Arabic, reply in clear, professional Modern Standard Arabic and use correct Odoo terminology. Keep punctuation and numbers in their natural positions in RTL text.\n"
+                        "7. When ready, provide a technical summary in 'requirements_summary' that follows the same formatting rules.\n"
                         "Return JSON: {'reply': '...', 'ready_to_generate': true/false, 'requirements_summary': '...'}"
                     ),
                 },

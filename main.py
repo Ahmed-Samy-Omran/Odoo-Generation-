@@ -56,7 +56,7 @@ for raw_origin in os.getenv("FRONTEND_URL", "http://localhost:5173").split(","):
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=frontend_origins if frontend_origins else ["*"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -828,6 +828,20 @@ async def chat_requirements(request: ChatRequest):
         raise HTTPException(status_code=400, detail="Last message must be from the user")
 
     payload = [{"role": m.role, "content": m.content} for m in request.messages]
+    language_hint = None
+    if request.preferred_language == "arabic":
+        language_hint = (
+            "Reply in Arabic using clear, professional Modern Standard Arabic and the correct Odoo terminology. "
+            "Format the response in clean Markdown with ### headings, backticks for technical names, clean bullet points or numbered lists, and bold only for the most critical terms. Technical names such as model names and field names must always be wrapped in backticks, even in Arabic replies. "
+            "Keep one blank line between sections, and preserve punctuation and numbers in their natural positions in RTL text. "
+            "If the user writes in English, still answer in Arabic."
+        )
+    elif request.preferred_language == "english":
+        language_hint = (
+            "Reply in English and keep the response formatted in clean Markdown with ### headings, backticks for technical names, clean bullet points or numbered lists, and selective bolding only where it adds clarity. Technical names such as model names and field names must always be wrapped in backticks. "
+            "Keep one blank line between sections. If the user writes in Arabic, still answer in English."
+        )
+
     try:
         if request.job_id:
             existing_job = supabase_service.get_generation_job(request.job_id)
@@ -841,6 +855,8 @@ async def chat_requirements(request: ChatRequest):
             ]
             combined_chat = chat_history + next_messages
             payload_for_ai = [{"role": m.get("role", "user"), "content": m.get("content", "")} for m in combined_chat]
+            if language_hint:
+                payload_for_ai.insert(0, {"role": "system", "content": language_hint})
             if existing_job and existing_job.get("module_config"):
                 payload_for_ai.append({
                     "role": "system",
@@ -857,6 +873,8 @@ async def chat_requirements(request: ChatRequest):
                 chat_history=combined_chat,
             )
         else:
+            if language_hint:
+                payload.insert(0, {"role": "system", "content": language_hint})
             response = await asyncio.to_thread(ai_service.chat_requirements, payload)
 
         for item in request.messages:

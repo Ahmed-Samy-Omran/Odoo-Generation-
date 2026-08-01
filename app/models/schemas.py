@@ -127,6 +127,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     job_id: Optional[str] = None
+    preferred_language: Optional[Literal["english", "arabic"]]
 
 
 class ChatResponse(BaseModel):
