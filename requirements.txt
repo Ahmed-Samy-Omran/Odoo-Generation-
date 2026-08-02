@@ -6,6 +6,8 @@ pydantic
 python-dotenv
 openai
 httpx<0.28
+redis>=5,<6
+fastapi-cache2[redis]>=0.2.1
 supabase==2.8.0
 chromadb
 sentence-transformers==2.2.2

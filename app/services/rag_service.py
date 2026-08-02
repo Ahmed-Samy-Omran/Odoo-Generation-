@@ -4,6 +4,9 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from fastapi_cache.decorator import cache
+from app.services.cache_service import RedisCacheService
+
 logger = logging.getLogger(__name__)
 
 
@@ -21,6 +24,7 @@ class RAGService:
         collection_name: str = "odoo_reference",
         model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
         odoo_addons_path: Optional[str] = None,
+        redis_url: Optional[str] = None,
     ) -> None:
         self.repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.persist_directory = self._resolve_path(
@@ -36,6 +40,7 @@ class RAGService:
         self._collection = None
         self._embedder = None
         self._rag_available: Optional[bool] = None  # None = not yet checked
+        self.cache_service = RedisCacheService(redis_url=redis_url or os.getenv("REDIS_URL"))
 
     def _resolve_path(self, path: Optional[str]) -> str:
         if not path:
@@ -197,9 +202,15 @@ class RAGService:
             "persist_directory": self.persist_directory,
         }
 
+    @cache(expire=3600, namespace="rag_search")
     def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         if not query or not query.strip():
             return []
+
+        cache_key = self.cache_service.build_key("rag_search", f"{query.strip()}|top_k={top_k}")
+        cached_results = self.cache_service.get_json(cache_key)
+        if cached_results is not None:
+            return cached_results
 
         if not self._is_available():
             return []
@@ -216,7 +227,7 @@ class RAGService:
         metadatas = results.get("metadatas", [[]])[0]
         distances = results.get("distances", [[]])[0]
 
-        return [
+        search_results = [
             {
                 "content": doc,
                 "metadata": meta,
@@ -224,6 +235,8 @@ class RAGService:
             }
             for doc, meta, dist in zip(documents, metadatas, distances)
         ]
+        self.cache_service.set_json(cache_key, search_results, ttl=1800)
+        return search_results
 
     def _format_search_results(self, results: List[Dict[str, Any]]) -> str:
         if not results:

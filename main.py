@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi_cache import FastAPICache
+from fastapi_cache.backends.redis import RedisBackend
+from redis import asyncio as aioredis
 from pydantic import BaseModel
 from typing import Optional
 
@@ -29,6 +32,11 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 load_dotenv()
+redis_url = os.getenv("REDIS_URL")
+if redis_url:
+    logger.info("REDIS_URL loaded successfully for backend cache integration.")
+else:
+    logger.info("REDIS_URL is not configured; Redis cache will remain disabled.")
 
 app = FastAPI(
     title="Odoo AI Module Generator",
@@ -40,6 +48,11 @@ app = FastAPI(
 async def startup_event() -> None:
     global jobs
     try:
+        if redis_url:
+            redis_client = aioredis.from_url(redis_url, decode_responses=True)
+            await redis_client.ping()
+            FastAPICache.init(RedisBackend(redis_client), prefix="odoo_cache")
+            logger.info("FastAPICache initialized with Redis backend.")
         synced_jobs = _load_jobs()
         if synced_jobs:
             jobs = synced_jobs
@@ -70,8 +83,8 @@ JOBS_STATE_PATH = os.path.join(BASE_DIR, "jobs_state.json")
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-ai_service = AIService()
-rag_service = RAGService()
+ai_service = AIService(redis_url=redis_url)
+rag_service = RAGService(redis_url=redis_url)
 
 
 def _is_initial_greeting(content: str) -> bool:

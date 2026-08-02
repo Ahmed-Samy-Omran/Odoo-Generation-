@@ -101,7 +101,9 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI, APIError
 from dotenv import load_dotenv
+from fastapi_cache.decorator import cache
 from app.models.schemas import GeneratorPayload, ModuleConfig, ChatResponse
+from app.services.cache_service import RedisCacheService
 from app.services.rag_service import RAGService
 
 # Load environment variables
@@ -126,7 +128,7 @@ class ProviderTestResult:
 
 
 class AIService:
-    def __init__(self):
+    def __init__(self, redis_url: Optional[str] = None):
         gemini_model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         openrouter_model = os.getenv("OPENROUTER_MODEL", "google/gemini-2.5-flash")
         bynara_url = os.getenv("BYNARA_URL", "https://router.bynara.id/v1")
@@ -175,7 +177,9 @@ class AIService:
         configured_order = os.getenv("AI_PROVIDER_ORDER", ",".join(default_order))
         order = [name.strip().lower() for name in configured_order.split(",") if name.strip()]
 
-        self.rag_service = RAGService()
+        self.redis_url = redis_url or os.getenv("REDIS_URL")
+        self.cache_service = RedisCacheService(redis_url=self.redis_url)
+        self.rag_service = RAGService(redis_url=self.redis_url)
         self.providers = []
         for name in order:
             group = provider_groups.get(name)
@@ -274,8 +278,15 @@ class AIService:
         """Test every configured gateway independently."""
         return [self.test_provider(provider, user_prompt) for provider in self.providers]
 
+    @cache(expire=3600, namespace="ai_chat")
     def chat_requirements(self, messages: List[Dict[str, str]]) -> ChatResponse:
         """Gather module requirements via conversational Q&A before generation."""
+        cache_payload = json.dumps(messages, ensure_ascii=False, sort_keys=True)
+        cache_key = self.cache_service.build_key("ai_chat", cache_payload)
+        cached_response = self.cache_service.get_json(cache_key)
+        if cached_response is not None:
+            return ChatResponse(**cached_response)
+
         for provider in self.providers:
             if not provider["key"]:
                 continue
@@ -283,7 +294,9 @@ class AIService:
             try:
                 logger.info(f"Chat via gateway: {provider['name']}")
                 content = self._call_provider_chat(provider, messages)
-                return self._parse_chat_response(content)
+                response = self._parse_chat_response(content)
+                self.cache_service.set_json(cache_key, response.model_dump(mode="json"), ttl=900)
+                return response
             except Exception as e:
                 logger.error(f"Chat gateway {provider['name']} failed: {str(e)}")
                 continue
@@ -337,8 +350,16 @@ class AIService:
         except json.JSONDecodeError as e:
             raise ValueError(f"Chat response was not valid JSON: {e}")
 
+    @cache(expire=86400, namespace="ai_analysis")
     def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None) -> GeneratorPayload:
         prompt = self._build_prompt(user_prompt, odoo_version)
+        cache_key = self.cache_service.build_key("ai_generate", json.dumps({
+            "prompt": user_prompt,
+            "odoo_version": odoo_version or "17.0",
+        }, ensure_ascii=False, sort_keys=True))
+        cached_payload = self.cache_service.get_json(cache_key)
+        if cached_payload is not None:
+            return GeneratorPayload(**cached_payload)
 
         for provider in self.providers:
             if not provider["key"]:
@@ -347,7 +368,9 @@ class AIService:
             try:
                 logger.info(f"Attempting to use gateway: {provider['name']}")
                 content = self._call_provider(provider, prompt, odoo_version)
-                return self._parse_response(content)
+                payload = self._parse_response(content)
+                self.cache_service.set_json(cache_key, payload.model_dump(mode="json"), ttl=900)
+                return payload
 
             except Exception as e:
                 logger.error(f"Gateway {provider['name']} failed: {str(e)}")
