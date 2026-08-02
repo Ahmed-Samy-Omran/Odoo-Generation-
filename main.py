@@ -9,6 +9,7 @@ import traceback
 import shutil
 import io
 import zipfile
+import re
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -71,6 +72,34 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ai_service = AIService()
 rag_service = RAGService()
+
+
+def _is_initial_greeting(content: str) -> bool:
+    normalized = re.sub(r"[^a-zA-Z\u0600-\u06FF\s]", " ", content or "").strip().lower()
+    if not normalized:
+        return False
+    greetings = {
+        "hi", "hello", "hey", "hey there", "hi there", "hello there", "salut", "heyya",
+        "اهلا", "اهلاً", "اهلا وسهلا", "اهلا ومرحبا", "مرحبا", "مرحباً", "السلام عليكم",
+        "thanks", "thank you", "thx", "شكرا", "شاكر", "شكرا جزيلا"
+    }
+    return normalized in greetings or normalized.startswith("hello ") or normalized.startswith("hi ")
+
+
+def _build_initial_greeting_reply(preferred_language: Optional[str]) -> ChatResponse:
+    if preferred_language == "arabic":
+        reply = (
+            "أهلاً بك! أنا مساعدك التقني لبناء موديولات Odoo، وسأساعدك في تصميم الوحدة خطوة بخطوة بشكل احترافي وسهل. 🚀\n\n"
+            "لنبدأ بالخطوة الأولى: ما هو الاسم التقني للوحدة `module name` الذي ترغب في إعطائه؟\n"
+            "يرجى استخدام صيغة `snake_case` مع بداية حرف صغير، مثل `purchase_extension` أو `hr_custom`."
+        )
+    else:
+        reply = (
+            "Welcome! I'm your Odoo Module Architect, and I'm excited to help you build your next module. 🚀\n\n"
+            "To get started, what is the technical name you'd like to give this module?\n"
+            "Please use `snake_case` with a lowercase starting character, for example `purchase_extension` or `hr_custom`."
+        )
+    return ChatResponse(reply=reply, ready_to_generate=False, requirements_summary="")
 
 
 def _persist_job_to_supabase(job_id: str, job_data: dict) -> None:
@@ -827,18 +856,28 @@ async def chat_requirements(request: ChatRequest):
     if last.role != "user":
         raise HTTPException(status_code=400, detail="Last message must be from the user")
 
+    if len(request.messages) == 1 and _is_initial_greeting(last.content):
+        return _build_initial_greeting_reply(request.preferred_language)
+
     payload = [{"role": m.role, "content": m.content} for m in request.messages]
     language_hint = None
     if request.preferred_language == "arabic":
         language_hint = (
-            "Reply in Arabic using clear, professional Modern Standard Arabic and the correct Odoo terminology. "
-            "Format the response in clean Markdown with ### headings, backticks for technical names, clean bullet points or numbered lists, and bold only for the most critical terms. Technical names such as model names and field names must always be wrapped in backticks, even in Arabic replies. "
+            "Reply in Arabic using a warm, professional Odoo architect tone. Be concise and technically precise. "
+            "For every new session, begin with a warm professional greeting and a short introduction, then ask only the first question: the module's technical name. If the user's message is only a greeting or a trivial opening such as hi, hello, اهلا, or thanks, also reply with a warm professional welcome and ask only that first question. Do not mention the full discovery flow yet. "
+            "Ask exactly ONE main question at a time and follow an incremental flow. After each user answer, acknowledge it briefly with positive feedback and ask only the next logical question. "
+            "If the answer is vague, ask one short clarifying question before moving on. "
+            "Use clean Markdown with backticks for all technical names such as model names, field names, module names, XML IDs, and method names. "
             "Keep one blank line between sections, and preserve punctuation and numbers in their natural positions in RTL text. "
             "If the user writes in English, still answer in Arabic."
         )
     elif request.preferred_language == "english":
         language_hint = (
-            "Reply in English and keep the response formatted in clean Markdown with ### headings, backticks for technical names, clean bullet points or numbered lists, and selective bolding only where it adds clarity. Technical names such as model names and field names must always be wrapped in backticks. "
+            "Reply in English with a warm, professional Odoo architect tone. Be concise and technically precise. "
+            "For every new session, begin with a warm professional greeting and a short introduction, then ask only the first question: the module's technical name. If the user's message is only a greeting or a trivial opening such as hi, hello, أهلا, or thanks, also reply with a warm professional welcome and ask only that first question. Do not mention the full discovery flow yet. "
+            "Ask exactly ONE main question at a time and follow an incremental flow. After each user answer, acknowledge it briefly with positive feedback and ask only the next logical question. "
+            "If the answer is vague, ask one short clarifying question before moving on. "
+            "Use clean Markdown with backticks for all technical names such as model names, field names, module names, XML IDs, and method names. "
             "Keep one blank line between sections. If the user writes in Arabic, still answer in English."
         )
 
