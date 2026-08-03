@@ -914,7 +914,7 @@ async def chat_requirements(request: ChatRequest):
                     "role": "system",
                     "content": "Current module configuration context:\n" + json.dumps(existing_job.get("module_config"), ensure_ascii=False),
                 })
-            response = await asyncio.to_thread(ai_service.chat_requirements, payload_for_ai)
+            response = await ai_service.chat_requirements(payload_for_ai)
             supabase_service.upsert_generation_job(
                 job_id=request.job_id,
                 status=existing_job.get("status", "running") if existing_job else "running",
@@ -927,7 +927,7 @@ async def chat_requirements(request: ChatRequest):
         else:
             if language_hint:
                 payload.insert(0, {"role": "system", "content": language_hint})
-            response = await asyncio.to_thread(ai_service.chat_requirements, payload)
+            response = await ai_service.chat_requirements(payload)
 
         for item in request.messages:
             supabase_service.insert_chat_message(None, item.role, item.content)

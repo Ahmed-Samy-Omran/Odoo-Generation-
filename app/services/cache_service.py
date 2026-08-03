@@ -65,7 +65,9 @@ class RedisCacheService:
             raw = self._client.get(key)
             if raw is None:
                 return None
-            return json.loads(raw.decode("utf-8"))
+            if isinstance(raw, (bytes, bytearray)):
+                raw = raw.decode("utf-8")
+            return json.loads(raw)
         except Exception as exc:
             logger.warning("Redis cache GET failed for %s: %s", key, exc)
             return None
