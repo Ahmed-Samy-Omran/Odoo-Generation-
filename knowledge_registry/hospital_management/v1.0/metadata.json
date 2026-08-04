@@ -1,0 +1,14 @@
+{
+  "name": "Hospital Management",
+  "version": "1.0.0",
+  "description": "Smart component for hospital patient, appointment, and billing workflows.",
+  "capabilities": [
+    "patient_management",
+    "appointment_scheduling",
+    "medical_records",
+    "billing",
+    "notifications"
+  ],
+  "author": "Coregen",
+  "tags": ["healthcare", "hospital", "workflow"]
+}

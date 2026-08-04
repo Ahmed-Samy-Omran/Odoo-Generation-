@@ -104,6 +104,7 @@ from dotenv import load_dotenv
 from fastapi_cache.decorator import cache
 from app.models.schemas import GeneratorPayload, ModuleConfig, ChatResponse
 from app.services.cache_service import RedisCacheService
+from app.services.component_registry_service import ComponentRegistryService
 from app.services.rag_service import RAGService
 
 # Load environment variables
@@ -180,6 +181,7 @@ class AIService:
         self.redis_url = redis_url or os.getenv("REDIS_URL")
         self.cache_service = RedisCacheService(redis_url=self.redis_url)
         self.rag_service = RAGService(redis_url=self.redis_url)
+        self.component_registry = ComponentRegistryService()
         self.providers = []
         for name in order:
             group = provider_groups.get(name)
@@ -352,10 +354,18 @@ class AIService:
 
     @cache(expire=86400, namespace="ai_analysis")
     def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None) -> GeneratorPayload:
-        prompt = self._build_prompt(user_prompt, odoo_version)
+        matching_components = self._find_matching_components(user_prompt)
+        component_context = self._build_component_context(matching_components)
+        if component_context:
+            logger.info(
+                "AI Orchestrator found matching registry components: %s",
+                ", ".join(c.component_id for c in matching_components),
+            )
+        prompt = self._build_prompt(user_prompt, odoo_version, component_context)
         cache_key = self.cache_service.build_key("ai_generate", json.dumps({
             "prompt": user_prompt,
             "odoo_version": odoo_version or "17.0",
+            "component_context": component_context,
         }, ensure_ascii=False, sort_keys=True))
         cached_payload = self.cache_service.get_json(cache_key)
         if cached_payload is not None:
@@ -378,11 +388,12 @@ class AIService:
 
         raise Exception("Fatal Error: All AI gateways failed. Please check your keys, quotas, and internet connection.")
 
-    def _build_prompt(self, user_prompt: str, odoo_version: Optional[str] = None) -> str:
+    def _build_prompt(self, user_prompt: str, odoo_version: Optional[str] = None, component_context: Optional[str] = None) -> str:
         """Standardized prompt with schema and a concrete example."""
         version = (odoo_version or "17.0").strip() or "17.0"
         rag_context = self.rag_service._format_search_results(self.rag_service.search(user_prompt, top_k=3))
-        return f"""Analyze the user request in two steps.
+        component_block = f"{component_context}\n\n" if component_context else ""
+        return f"""{component_block}Analyze the user request in two steps.
 1. First, build a concise plan for the module, including models, views, menus, security groups and deployment target.
 2. Then output only the final JSON payload that matches the GeneratorPayload schema.
 
@@ -467,6 +478,47 @@ User request:
         if start != -1 and end != -1 and end > start:
             return text[start:end + 1]
         return text
+
+    def _find_matching_components(self, user_prompt: str) -> List[Any]:
+        normalized = user_prompt.lower()
+        matches: List[Any] = []
+        for component in self.component_registry.list_components():
+            score = 0
+            keywords: List[str] = []
+            if component.metadata.name:
+                keywords.extend(component.metadata.name.lower().split())
+            if component.metadata.capabilities:
+                keywords.extend(component.metadata.capabilities)
+            if component.metadata.tags:
+                keywords.extend(component.metadata.tags)
+
+            for keyword in keywords:
+                normalized_keyword = keyword.replace("_", " ").lower().strip()
+                if not normalized_keyword:
+                    continue
+                if normalized_keyword in normalized:
+                    score += 1
+            if score > 0:
+                matches.append((score, component))
+        matches.sort(key=lambda item: item[0], reverse=True)
+        return [component for _, component in matches]
+
+    def _build_component_context(self, components: List[Any]) -> str:
+        if not components:
+            return ""
+        lines = [
+            "Smart components available in the knowledge registry:",
+        ]
+        for component in components:
+            metadata = component.metadata
+            lines.append(
+                f"- {component.component_id}: {metadata.description or 'No description.'} "
+                f"(capabilities: {', '.join(metadata.capabilities or [])})"
+            )
+        lines.append(
+            "When a matched component is suitable, prefer reusing its internal business rules and templates instead of generating all code from scratch."
+        )
+        return "\n".join(lines)
 
     def _parse_response(self, response_text: str) -> GeneratorPayload:
         """Validates AI response against the schema."""

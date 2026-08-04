@@ -31,18 +31,36 @@ class ComponentRegistryService:
             if not component_dir.is_dir():
                 continue
 
-            metadata_path = component_dir / "metadata.json"
-            if not metadata_path.exists():
+            direct_metadata_path = component_dir / "metadata.json"
+            if direct_metadata_path.exists():
+                self._append_component_entry(components, component_dir.name, direct_metadata_path)
                 continue
 
-            try:
-                raw = metadata_path.read_text(encoding="utf-8")
-                payload = json.loads(raw)
-                metadata = ComponentMetadata(**payload)
-                components.append(
-                    ComponentRegistryEntry(component_id=component_dir.name, metadata=metadata)
-                )
-            except (json.JSONDecodeError, ValidationError) as exc:
-                raise ValueError(f"Invalid metadata for component '{component_dir.name}': {exc}") from exc
+            for version_dir in sorted(component_dir.iterdir()):
+                if not version_dir.is_dir():
+                    continue
+
+                metadata_path = version_dir / "metadata.json"
+                if not metadata_path.exists():
+                    continue
+
+                component_id = f"{component_dir.name}/{version_dir.name}"
+                self._append_component_entry(components, component_id, metadata_path)
 
         return components
+
+    def _append_component_entry(
+        self,
+        components: List[ComponentRegistryEntry],
+        component_id: str,
+        metadata_path: Path,
+    ) -> None:
+        try:
+            raw = metadata_path.read_text(encoding="utf-8")
+            payload = json.loads(raw)
+            metadata = ComponentMetadata(**payload)
+            components.append(
+                ComponentRegistryEntry(component_id=component_id, metadata=metadata)
+            )
+        except (json.JSONDecodeError, ValidationError) as exc:
+            raise ValueError(f"Invalid metadata for component '{component_id}': {exc}") from exc
