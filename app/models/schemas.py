@@ -134,3 +134,17 @@ class ChatResponse(BaseModel):
     reply: str
     ready_to_generate: bool = False
     requirements_summary: str = ""
+
+
+class ComponentMetadata(BaseModel):
+    name: str
+    version: str
+    description: Optional[str] = None
+    capabilities: List[str]
+    author: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class ComponentRegistryEntry(BaseModel):
+    component_id: str
+    metadata: ComponentMetadata

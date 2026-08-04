@@ -1,0 +1,12 @@
+{
+  "name": "Auth Component",
+  "version": "1.0.0",
+  "description": "Authentication knowledge component for user session management.",
+  "capabilities": [
+    "user_authentication",
+    "session_management",
+    "token_validation"
+  ],
+  "author": "Coregen",
+  "tags": ["security", "authentication", "user"]
+}

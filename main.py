@@ -18,14 +18,15 @@ from fastapi_cache import FastAPICache
 from fastapi_cache.backends.redis import RedisBackend
 from redis import asyncio as aioredis
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 
-from app.models.schemas import GeneratorPayload, ChatMessage, ChatRequest, ChatResponse
+from app.models.schemas import ComponentRegistryEntry, GeneratorPayload, ChatMessage, ChatRequest, ChatResponse
 from app.generators.OdooModuleGenerator import OdooModuleGenerator
 from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
 from app.services.git_deploy_service import GitDeployService
 from app.services.rag_service import RAGService
+from app.services.component_registry_service import ComponentRegistryService
 from app.services.supabase_service import supabase_service
 
 logging.basicConfig(level=logging.INFO)
@@ -85,6 +86,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 ai_service = AIService(redis_url=redis_url)
 rag_service = RAGService(redis_url=redis_url)
+component_registry_service = ComponentRegistryService()
 
 
 def _is_initial_greeting(content: str) -> bool:
@@ -1155,6 +1157,15 @@ async def download_result(job_id: str):
         filename=zip_name,
         media_type="application/x-zip-compressed",
     )
+
+
+@app.get("/components", response_model=List[ComponentRegistryEntry])
+def list_components():
+    try:
+        return component_registry_service.list_components()
+    except ValueError as exc:
+        logger.exception("Component registry metadata error")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 if __name__ == "__main__":
