@@ -27,6 +27,7 @@ from app.services.ai_service import AIService
 from app.services.git_deploy_service import GitDeployService
 from app.services.rag_service import RAGService
 from app.services.component_registry_service import ComponentRegistryService
+from app.services.learning_loop_service import append_learning_entry
 from app.services.supabase_service import supabase_service
 
 logging.basicConfig(level=logging.INFO)
@@ -613,7 +614,7 @@ def _extract_github_owner(repository_url: Optional[str]) -> Optional[str]:
     return None
 
 
-async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int = 10):
+async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int = 10, prompt: Optional[str] = None):
     generator = OdooModuleGenerator(templates_dir=TEMPLATES_DIR)
     module_paths = []
     total = len(modules)
@@ -650,6 +651,22 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
                     message="Done! Module(s) pushed to GitHub.",
                     github_url=", ".join(github_urls),
                 )
+                try:
+                    append_learning_entry(
+                        job_id=job_id,
+                        prompt=prompt,
+                        modules=modules,
+                        module_paths=module_paths,
+                        matched_components=sorted({
+                            comp
+                            for module in modules
+                            if isinstance(module, dict)
+                            for comp in (module.get("matched_components") or [])
+                        }),
+                        notes=["Generated module pushed to GitHub."],
+                    )
+                except Exception:
+                    logger.exception("Failed to append learning log for job %s", job_id)
             except EnvironmentError as exc:
                 err = f"GitHub config error: {exc}"
                 _update_job(job_id, status="error", progress=0, message=err, error=err)
@@ -692,6 +709,22 @@ async def _generate_and_deploy(job_id: str, modules: list, ai_done_progress: int
             message="Done! Your module is ready.",
             download_url=zip_url or f"/download/{job_id}",
         )
+        try:
+            append_learning_entry(
+                job_id=job_id,
+                prompt=prompt,
+                modules=modules,
+                module_paths=module_paths,
+                matched_components=sorted({
+                    comp
+                    for module in modules
+                    if isinstance(module, dict)
+                    for comp in (module.get("matched_components") or [])
+                }),
+                notes=["Generated module packaged as ZIP."],
+            )
+        except Exception:
+            logger.exception("Failed to append learning log for job %s", job_id)
     except Exception as exc:
         logger.exception("Generation pipeline failed for job %s", job_id)
         err = str(exc).strip() or "Generation failed"
@@ -732,7 +765,7 @@ async def _run_generate_module_job(job_id: str, payload: GeneratorPayload):
         )
         await asyncio.sleep(0)
 
-        await _generate_and_deploy(job_id, modules, ai_done_progress=10)
+        await _generate_and_deploy(job_id, modules, ai_done_progress=10, prompt=None)
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
         err_msg = str(exc)
@@ -785,7 +818,7 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str, odoo_vers
         )
         await asyncio.sleep(0)
 
-        await _generate_and_deploy(job_id, modules, ai_done_progress=55)
+        await _generate_and_deploy(job_id, modules, ai_done_progress=55, prompt=user_prompt)
     except Exception as exc:
         logger.exception("Job %s failed", job_id)
         err_msg = str(exc)
