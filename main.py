@@ -50,7 +50,9 @@ async def startup_event() -> None:
     global jobs
     try:
         if redis_url:
-            redis_client = aioredis.from_url(redis_url, decode_responses=True)
+            # FastAPICache expects raw bytes from Redis when decoding cached responses.
+            # Using decode_responses=False avoids fastapi-cache decode issues with str values.
+            redis_client = aioredis.from_url(redis_url, decode_responses=False)
             await redis_client.ping()
             FastAPICache.init(RedisBackend(redis_client), prefix="odoo_cache")
             logger.info("FastAPICache initialized with Redis backend.")
@@ -748,7 +750,7 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str, odoo_vers
         )
         await asyncio.sleep(0)
 
-        payload = await asyncio.to_thread(ai_service.analyze_requirements, user_prompt, odoo_version)
+        payload = await ai_service.analyze_requirements(user_prompt, odoo_version)
 
         payload_data = payload.model_dump()
         modules = payload_data.get("modules", [])
@@ -761,6 +763,18 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str, odoo_vers
         for module in modules:
             if isinstance(module, dict):
                 module.setdefault("odoo_version", version)
+
+        # Attach matched registry component IDs to module configs so the generator can merge docs/security
+        try:
+            matching_components = ai_service._find_matching_components(user_prompt) if hasattr(ai_service, '_find_matching_components') else []
+            matched_ids = [c.component_id for c in matching_components] if matching_components else []
+            if matched_ids:
+                for module in modules:
+                    if isinstance(module, dict):
+                        module.setdefault('matched_components', matched_ids)
+        except Exception:
+            # non-fatal: proceed without matched components
+            matched_ids = []
 
         _update_job(
             job_id,

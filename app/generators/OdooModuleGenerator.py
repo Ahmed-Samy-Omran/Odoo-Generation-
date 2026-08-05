@@ -1,8 +1,13 @@
+import csv
 import os
 import json
+import shutil
 from pathlib import Path
-from jinja2 import Environment, FileSystemLoader
 from typing import Dict, List, Any, Optional
+
+from app.services.component_registry_service import ComponentRegistryService
+from app.models.schemas import ComponentRegistryEntry
+from jinja2 import Environment, FileSystemLoader
 
 
 class OdooModuleGenerator:
@@ -45,12 +50,16 @@ class OdooModuleGenerator:
         # Create module directory structure
         self._create_directory_structure(module_path)
 
+        # Merge docs from matched components (if provided in config)
+        self._generate_docs(config, module_path)
+
         # Generate all files
         self._generate_manifest(config, module_path)
         self._generate_security_groups(config, module_path)  # New: Generate security groups
         self._generate_models(config, module_path)
         self._generate_views(config, module_path)
         self._generate_security(config, module_path)
+        self._generate_component_security(config, module_path)
         self._generate_actions(config, module_path)
         self._generate_menus(config, module_path)
         self._generate_reports(config, module_path)  # New: Generate reports
@@ -312,6 +321,105 @@ class OdooModuleGenerator:
         security_file = os.path.join(security_dir, "security.xml")
         with open(security_file, "w", encoding="utf-8") as f:
             f.write(content)
+
+    def _generate_docs(self, config: Dict[str, Any], module_path: str) -> None:
+        """Copy ADRs and business rules from matched components into module docs/ folder."""
+        matched = config.get("matched_components") or []
+        if not matched:
+            return
+
+        docs_dir = os.path.join(module_path, "docs")
+        Path(docs_dir).mkdir(parents=True, exist_ok=True)
+
+        registry = ComponentRegistryService()
+        for comp_id in matched:
+            comp_dir = registry.get_component_dir(comp_id)
+            if not comp_dir:
+                continue
+
+            # Copy business_rules.md if present
+            br = Path(comp_dir) / "business_rules.md"
+            if br.exists() and br.is_file():
+                shutil.copy(str(br), os.path.join(docs_dir, br.name))
+
+            # Copy adrs/ folder markdown files
+            adrs_dir = Path(comp_dir) / "adrs"
+            if adrs_dir.exists() and adrs_dir.is_dir():
+                for f in sorted(adrs_dir.iterdir()):
+                    if f.is_file() and f.suffix.lower() == ".md":
+                        shutil.copy(str(f), os.path.join(docs_dir, f.name))
+
+            # Copy docs/ folder markdown files
+            docs_source_dir = Path(comp_dir) / "docs"
+            if docs_source_dir.exists() and docs_source_dir.is_dir():
+                for f in sorted(docs_source_dir.iterdir()):
+                    if f.is_file() and f.suffix.lower() == ".md":
+                        shutil.copy(str(f), os.path.join(docs_dir, f.name))
+
+            # Also copy any ADR-like md files at component root (e.g., 001-*.md or *adr*.md)
+            for f in sorted(Path(comp_dir).iterdir()):
+                if f.is_file() and f.suffix.lower() == ".md":
+                    name = f.name.lower()
+                    if name.startswith("00") or "adr" in name:
+                        shutil.copy(str(f), os.path.join(docs_dir, f.name))
+
+    def _generate_component_security(self, config: Dict[str, Any], module_path: str) -> None:
+        """Merge security rule lines from matched components into module's ir.model.access.csv."""
+        matched = config.get("matched_components") or []
+        if not matched:
+            return
+
+        registry = ComponentRegistryService()
+        security_dir = Path(module_path) / "security"
+        security_dir.mkdir(parents=True, exist_ok=True)
+        module_security = security_dir / "ir.model.access.csv"
+
+        # Read existing entries (skip header)
+        existing_lines: List[str] = []
+        header = "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink"
+        if module_security.exists():
+            lines = module_security.read_text(encoding="utf-8").splitlines()
+            if lines:
+                # assume first line is header if it contains id,name
+                if "id," in lines[0].lower():
+                    header = lines[0]
+                    existing_lines = lines[1:]
+                else:
+                    existing_lines = lines
+
+        to_add: List[str] = []
+        for comp_id in matched:
+            comp_dir = registry.get_component_dir(comp_id)
+            if not comp_dir:
+                continue
+
+            candidates = [
+                Path(comp_dir) / "security" / "ir.model.access.csv",
+                Path(comp_dir) / "security" / "rules.csv",
+                Path(comp_dir) / "security_rules.csv",
+                Path(comp_dir) / "ir.model.access.csv",
+            ]
+            for cand in candidates:
+                if cand.exists() and cand.is_file():
+                    lines = cand.read_text(encoding="utf-8").splitlines()
+                    for ln in lines:
+                        ln_strip = ln.strip()
+                        if not ln_strip:
+                            continue
+                        low = ln_strip.lower()
+                        # skip header-like lines
+                        if low.startswith("id,") or "model_id" in low:
+                            continue
+                        if ln_strip not in existing_lines and ln_strip not in to_add:
+                            to_add.append(ln_strip)
+
+        if to_add:
+            with open(module_security, "w", encoding="utf-8") as f:
+                f.write(header + "\n")
+                for ln in existing_lines:
+                    f.write(ln + "\n")
+                for ln in to_add:
+                    f.write(ln + "\n")
 
     def _generate_actions(self, config: Dict[str, Any], module_path: str) -> None:
         """Generate action XML files"""

@@ -4,7 +4,6 @@ import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi_cache.decorator import cache
 from app.services.cache_service import RedisCacheService
 
 logger = logging.getLogger(__name__)
@@ -202,8 +201,7 @@ class RAGService:
             "persist_directory": self.persist_directory,
         }
 
-    @cache(expire=3600, namespace="rag_search")
-    def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
+    async def search(self, query: str, top_k: int = 3) -> List[Dict[str, Any]]:
         if not query or not query.strip():
             return []
 

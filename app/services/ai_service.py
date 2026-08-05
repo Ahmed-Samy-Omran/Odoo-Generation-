@@ -93,6 +93,8 @@
 #             raise ValueError(f"Gemini API Server Error: {e.value}\nResponse: {response.text}")
 #         except Exception as e:
 #             raise ValueError(f"AI response did not match schema: {e}\nResponse: {response.text}")
+import asyncio
+import inspect
 import os
 import json
 import logging
@@ -101,7 +103,6 @@ from typing import Any, Dict, List, Optional
 
 from openai import OpenAI, APIError
 from dotenv import load_dotenv
-from fastapi_cache.decorator import cache
 from app.models.schemas import GeneratorPayload, ModuleConfig, ChatResponse
 from app.services.cache_service import RedisCacheService
 from app.services.component_registry_service import ComponentRegistryService
@@ -280,12 +281,11 @@ class AIService:
         """Test every configured gateway independently."""
         return [self.test_provider(provider, user_prompt) for provider in self.providers]
 
-    @cache(expire=3600, namespace="ai_chat")
-    def chat_requirements(self, messages: List[Dict[str, str]]) -> ChatResponse:
+    async def chat_requirements(self, messages: List[Dict[str, str]]) -> ChatResponse:
         """Gather module requirements via conversational Q&A before generation."""
         cache_payload = json.dumps(messages, ensure_ascii=False, sort_keys=True)
         cache_key = self.cache_service.build_key("ai_chat", cache_payload)
-        cached_response = self.cache_service.get_json(cache_key)
+        cached_response = await self._ensure_awaited(self.cache_service.get_json(cache_key))
         if cached_response is not None:
             return ChatResponse(**cached_response)
 
@@ -297,7 +297,9 @@ class AIService:
                 logger.info(f"Chat via gateway: {provider['name']}")
                 content = self._call_provider_chat(provider, messages)
                 response = self._parse_chat_response(content)
-                self.cache_service.set_json(cache_key, response.model_dump(mode="json"), ttl=900)
+                await self._ensure_awaited(
+                    self.cache_service.set_json(cache_key, response.model_dump(mode="json"), ttl=900)
+                )
                 return response
             except Exception as e:
                 logger.error(f"Chat gateway {provider['name']} failed: {str(e)}")
@@ -340,6 +342,11 @@ class AIService:
             raise ValueError("Gateway returned empty chat content.")
         return content
 
+    async def _ensure_awaited(self, value: Any) -> Any:
+        if inspect.isawaitable(value):
+            return await value
+        return value
+
     def _parse_chat_response(self, response_text: str) -> ChatResponse:
         cleaned = self._extract_json(response_text)
         try:
@@ -352,8 +359,7 @@ class AIService:
         except json.JSONDecodeError as e:
             raise ValueError(f"Chat response was not valid JSON: {e}")
 
-    @cache(expire=86400, namespace="ai_analysis")
-    def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None) -> GeneratorPayload:
+    async def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None) -> GeneratorPayload:
         matching_components = self._find_matching_components(user_prompt)
         component_context = self._build_component_context(matching_components)
         if component_context:
@@ -361,7 +367,7 @@ class AIService:
                 "AI Orchestrator found matching registry components: %s",
                 ", ".join(c.component_id for c in matching_components),
             )
-        prompt = self._build_prompt(user_prompt, odoo_version, component_context)
+        prompt = await self._build_prompt(user_prompt, odoo_version, component_context)
         cache_key = self.cache_service.build_key("ai_generate", json.dumps({
             "prompt": user_prompt,
             "odoo_version": odoo_version or "17.0",
@@ -369,7 +375,7 @@ class AIService:
         }, ensure_ascii=False, sort_keys=True))
         cached_payload = self.cache_service.get_json(cache_key)
         if cached_payload is not None:
-            return GeneratorPayload(**cached_payload)
+            return self._ensure_generator_payload(cached_payload)
 
         for provider in self.providers:
             if not provider["key"]:
@@ -380,7 +386,7 @@ class AIService:
                 content = self._call_provider(provider, prompt, odoo_version)
                 payload = self._parse_response(content)
                 self.cache_service.set_json(cache_key, payload.model_dump(mode="json"), ttl=900)
-                return payload
+                return self._ensure_generator_payload(payload)
 
             except Exception as e:
                 logger.error(f"Gateway {provider['name']} failed: {str(e)}")
@@ -388,10 +394,11 @@ class AIService:
 
         raise Exception("Fatal Error: All AI gateways failed. Please check your keys, quotas, and internet connection.")
 
-    def _build_prompt(self, user_prompt: str, odoo_version: Optional[str] = None, component_context: Optional[str] = None) -> str:
+    async def _build_prompt(self, user_prompt: str, odoo_version: Optional[str] = None, component_context: Optional[str] = None) -> str:
         """Standardized prompt with schema and a concrete example."""
         version = (odoo_version or "17.0").strip() or "17.0"
-        rag_context = self.rag_service._format_search_results(self.rag_service.search(user_prompt, top_k=3))
+        rag_results = await self.rag_service.search(user_prompt, top_k=3)
+        rag_context = self.rag_service._format_search_results(rag_results)
         component_block = f"{component_context}\n\n" if component_context else ""
         return f"""{component_block}Analyze the user request in two steps.
 1. First, build a concise plan for the module, including models, views, menus, security groups and deployment target.
@@ -520,21 +527,34 @@ User request:
         )
         return "\n".join(lines)
 
-    def _parse_response(self, response_text: str) -> GeneratorPayload:
+    def _ensure_generator_payload(self, payload: Any) -> GeneratorPayload:
+        if isinstance(payload, GeneratorPayload):
+            return payload
+        if isinstance(payload, dict):
+            return GeneratorPayload(**payload)
+        if isinstance(payload, list):
+            return GeneratorPayload(modules=[ModuleConfig(**m) for m in payload])
+        raise ValueError(f"Unable to normalize payload to GeneratorPayload: {type(payload).__name__}")
+
+    def _parse_response(self, response_text: Any) -> GeneratorPayload:
         """Validates AI response against the schema."""
-        cleaned = self._extract_json(response_text)
         try:
-            data = json.loads(cleaned)
+            if isinstance(response_text, (dict, list)):
+                data = response_text
+            else:
+                cleaned = self._extract_json(str(response_text))
+                data = json.loads(cleaned)
+
             # Handle cases where AI might skip the 'modules' wrapper
             if isinstance(data, dict) and "module_name" in data and "modules" not in data:
                 return GeneratorPayload(modules=[ModuleConfig(**data)])
-            elif isinstance(data, list):
+            if isinstance(data, list):
                 return GeneratorPayload(modules=[ModuleConfig(**m) for m in data])
 
             return GeneratorPayload(**data)
         except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse JSON: {cleaned[:300]}...")
+            logger.error(f"Failed to parse JSON: {response_text!r}")
             raise ValueError(f"AI response was not valid JSON: {e}")
         except Exception as e:
-            logger.error(f"Failed to validate schema: {cleaned[:300]}...")
+            logger.error(f"Failed to validate schema: {response_text!r}")
             raise ValueError(f"AI response did not match schema: {e}")

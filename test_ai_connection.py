@@ -31,7 +31,7 @@ def test_ai_connection():
 
     print("--- Fallback chain test (first working provider wins) ---")
     try:
-        result = service.analyze_requirements(TEST_PROMPT)
+        result = asyncio.run(service.analyze_requirements(TEST_PROMPT))
         print(f"OK -> module: {result.modules[0].module_name}")
     except Exception as e:
         print(f"FAIL -> {e}")
