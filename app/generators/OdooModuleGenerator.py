@@ -1,164 +1,159 @@
 import csv
-import os
 import json
+import logging
+import os
 import shutil
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from app.services.component_registry_service import ComponentRegistryService
-from app.models.schemas import ComponentRegistryEntry
 from jinja2 import Environment, FileSystemLoader
+
+logger = logging.getLogger(__name__)
 
 
 class OdooModuleGenerator:
-    """Generate Odoo modules from JSON configuration"""
+    """Generate Odoo modules from JSON configuration."""
 
     def __init__(self, templates_dir: str):
-        """
-        Initialize the generator with templates directory
+        """Initialize the generator with templates directory.
 
         Args:
-            templates_dir: Path to Jinja2 templates directory
+            templates_dir: Path to Jinja2 templates directory.
         """
-        self.templates_dir = templates_dir
+        self.templates_dir = Path(templates_dir)
         self.env = Environment(
-            loader=FileSystemLoader(templates_dir),
+            loader=FileSystemLoader(str(self.templates_dir)),
             trim_blocks=True,
-            lstrip_blocks=True
+            lstrip_blocks=True,
         )
-        self.output_dir = None
+        self.output_dir: Optional[Path] = None
 
     def generate_module(self, config: Dict[str, Any], output_dir: str) -> str:
-        """
-        Generate complete Odoo module from JSON configuration
+        """Generate complete Odoo module from JSON configuration.
 
         Args:
-            config: Dictionary containing module configuration
-            output_dir: Directory to generate module in
+            config: Dictionary containing module configuration.
+            output_dir: Directory to generate module in.
 
         Returns:
-            Path to generated module directory
+            Path to generated module directory.
         """
-        self.output_dir = output_dir
-
-        # Preprocess and clean config
+        self.output_dir = Path(output_dir)
         config = self._preprocess_config(config)
 
         module_name = config.get("module_name", "custom_module")
-        module_path = os.path.join(output_dir, module_name)
+        module_path = self.output_dir / module_name
+        module_path.mkdir(parents=True, exist_ok=True)
 
-        # Create module directory structure
         self._create_directory_structure(module_path)
-
-        # Merge docs from matched components (if provided in config)
         self._generate_docs(config, module_path)
 
-        # Generate all files
         self._generate_manifest(config, module_path)
-        self._generate_security_groups(config, module_path)  # New: Generate security groups
+        self._generate_security_groups(config, module_path)
         self._generate_models(config, module_path)
         self._generate_views(config, module_path)
         self._generate_security(config, module_path)
         self._generate_component_security(config, module_path)
         self._generate_actions(config, module_path)
         self._generate_menus(config, module_path)
-        self._generate_reports(config, module_path)  # New: Generate reports
+        self._generate_reports(config, module_path)
         self._generate_init_files(config, module_path)
 
-        return module_path
+        return str(module_path)
 
     def _preprocess_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Preprocess and clean up the config to ensure correct casing and reference resolving"""
+        """Preprocess the config to normalize fields and resolve menu/action references."""
         module_name = config.get("module_name", "custom_module")
 
-        # 1. Normalize field types to lowercase and populate missing view fields
+        self._normalize_fields(config)
+        menu_id_map = self._build_xml_id_map(config.get("menus") or [], suffix="menu")
+        action_id_map = self._build_xml_id_map(config.get("actions") or [], suffix="action")
+        self._resolve_menu_references(config, module_name, menu_id_map, action_id_map)
+        logger.debug("Preprocessed config for module %s", module_name)
+
+        return config
+
+    def _normalize_fields(self, config: Dict[str, Any]) -> None:
+        """Normalize field definitions and ensure view field lists exist."""
         for model in config.get("models", []):
             fields = model.get("fields", [])
-            field_names = []
+            field_names: List[str] = []
             for field in fields:
-                if "type" in field:
+                if "type" in field and isinstance(field["type"], str):
                     field["type"] = field["type"].lower()
 
-                # CRITICAL ODOO SYNTAX RULES: STRICT SELECTION FIELDS
-                if field["type"] == "selection" and not field.get("selection_options"):
-                    # Fallback to char if no options provided for selection
+                if field.get("type") == "selection" and not field.get("selection_options"):
                     field["type"] = "char"
-                    field[
-                        "label"] = f"[WARNING] Selection field {field.get('name')} converted to Char. No selection_options provided."
+                    field["label"] = (
+                        f"[WARNING] Selection field {field.get('name')} converted to Char. "
+                        "No selection_options provided."
+                    )
 
                 if field.get("name"):
                     field_names.append(field["name"])
 
-            if not model.get("tree_view_fields"):
-                model["tree_view_fields"] = field_names[:5]
-            if not model.get("form_view_fields"):
-                model["form_view_fields"] = field_names
+            model.setdefault("tree_view_fields", field_names[:5])
+            model.setdefault("form_view_fields", field_names)
 
-        # 2. Build XML ID maps for local menus and actions
-        def clean_name(name: str) -> str:
-            return name.lower().replace(".", "_").replace(" ", "_")
+    @staticmethod
+    def _clean_name(value: str) -> str:
+        """Normalize a name string to a safe XML ID component."""
+        return value.lower().replace(".", "_").replace(" ", "_")
 
-        menu_id_map = {}
-        for menu in config.get("menus") or []:
-            name = menu.get("name", "")
+    def _build_xml_id_map(self, items: List[Dict[str, Any]], suffix: str) -> Dict[str, str]:
+        """Build a mapping from name variants to generated XML IDs."""
+        id_map: Dict[str, str] = {}
+        for item in items:
+            name = item.get("name", "")
             if not name:
                 continue
-            gen_id = f"{clean_name(name)}_menu"
-            snake_name = clean_name(name)
+            snake_name = self._clean_name(name)
+            base_id = f"{snake_name}_{suffix}"
+            aliases = [
+                base_id,
+                snake_name,
+                f"{suffix}_{snake_name}",
+                f"{suffix}_{snake_name}_{suffix}",
+            ]
+            for alias in aliases:
+                id_map[alias] = base_id
+        return id_map
 
-            # Map various ways AI might refer to this menu to the actual ID
-            for ref in [gen_id, snake_name, f"menu_{snake_name}", f"menu_{snake_name}_menu", f"menu_{snake_name}_root"]:
-                menu_id_map[ref] = gen_id
+    def _resolve_menu_references(
+        self,
+        config: Dict[str, Any],
+        module_name: str,
+        menu_id_map: Dict[str, str],
+        action_id_map: Dict[str, str],
+    ) -> None:
+        """Resolve menu parent and action references to normalized XML IDs."""
 
-        action_id_map = {}
-        for action in config.get("actions") or []:
-            name = action.get("name", "")
-            if not name:
-                continue
-            gen_id = f"{clean_name(name)}_action"
-            snake_name = clean_name(name)
+        def resolve_reference(ref_value: str, id_map: Dict[str, str]) -> Optional[str]:
+            ref_id = ref_value.split(".")[-1]
+            if ref_id in id_map:
+                return id_map[ref_id]
+            if len(ref_value.split(".")) > 1:
+                prefix = ref_value.split(".")[0]
+                if prefix == module_name or prefix in ["hospital_management", "gym_management", "custom_module"]:
+                    return id_map.get(ref_id)
+            guessed_id = self._clean_name(ref_value)
+            if id_map is action_id_map:
+                return id_map.get(f"{guessed_id}_action")
+            return id_map.get(guessed_id)
 
-            for ref in [gen_id, snake_name, f"action_{snake_name}", f"action_{snake_name}_action"]:
-                action_id_map[ref] = gen_id
-
-        # 3. Resolve parent_xml_id and action_xml_id references
         for menu in config.get("menus") or []:
-            # Resolve parent_xml_id
             parent = menu.get("parent_xml_id")
             if parent:
-                parts = parent.split(".")
-                ref_id = parts[-1]
-                if ref_id in menu_id_map:
-                    menu["parent_xml_id"] = menu_id_map[ref_id]
-                elif len(parts) > 1:
-                    prefix = parts[0]
-                    if prefix == module_name or prefix in ["hospital_management", "gym_management", "custom_module"]:
-                        if ref_id in menu_id_map:
-                            menu["parent_xml_id"] = menu_id_map[ref_id]
-                        else:
-                            # Default to the first root menu if prefix matches but ID is not found
-                            root_menus = [m for m in (config.get("menus") or []) if not m.get("parent_xml_id")]
-                            if root_menus:
-                                menu["parent_xml_id"] = f"{clean_name(root_menus[0]['name'])}_menu"
-            # Resolve action_xml_id
+                resolved_parent = resolve_reference(parent, menu_id_map)
+                if resolved_parent:
+                    menu["parent_xml_id"] = resolved_parent
+
             action_ref = menu.get("action_xml_id")
             if action_ref:
-                parts = action_ref.split(".")
-                ref_id = parts[-1]
-                if ref_id in action_id_map:
-                    menu["action_xml_id"] = action_id_map[ref_id]
-                elif len(parts) > 1:
-                    prefix = parts[0]
-                    if prefix == module_name or prefix in ["hospital_management", "gym_management", "custom_module"]:
-                        if ref_id in action_id_map:
-                            menu["action_xml_id"] = action_id_map[ref_id]
-                else:
-                    menu_snake = clean_name(menu.get("name", ""))
-                    guessed_id = f"{menu_snake}_action"
-                    if guessed_id in action_id_map:
-                        menu["action_xml_id"] = guessed_id
-
-        return config
+                resolved_action = resolve_reference(action_ref, action_id_map)
+                if resolved_action:
+                    menu["action_xml_id"] = resolved_action
 
     def _create_directory_structure(self, module_path: str) -> None:
         """Create the basic Odoo module directory structure"""

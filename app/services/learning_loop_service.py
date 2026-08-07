@@ -1,10 +1,26 @@
+"""Learning loop service.
+
+This module provides a small utility to append learning entries to
+`knowledge_registry/learning_log.json` after successful module
+generation. Entries include the original prompt, matched components,
+and the generated files for each module.
+
+Standards:
+- Uses type hints on public functions.
+- Includes Google-style docstrings.
+- Minimal external dependencies.
+"""
+
 import json
 import os
 import datetime
+import logging
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from app.services.component_registry_service import ComponentRegistryService
+
+logger = logging.getLogger(__name__)
 
 TEXT_EXTENSIONS = {".py", ".xml", ".csv", ".js", ".css", ".html", ".md", ".txt", ".json"}
 
@@ -70,22 +86,44 @@ def append_learning_entry(
     notes: Optional[List[str]] = None,
     registry_dir: Optional[str] = None,
 ) -> None:
+    """Append a learning entry to the global learning log.
+
+    Args:
+        job_id: Unique identifier for the generation job.
+        prompt: The original user prompt used to generate the module(s).
+        modules: The module configuration(s) that were generated.
+        module_paths: File system paths to the generated module directories.
+        matched_components: Optional list of matched component IDs used during generation.
+        notes: Optional list of textual notes about the generation (e.g., "pushed to github").
+        registry_dir: Optional override for the knowledge registry directory.
+    """
     path = _get_learning_log_path(registry_dir)
     entries = _load_learning_log(path)
 
-    collected_files = _collect_files_from_paths(module_paths)
-    modules_data = []
+    try:
+        collected_files = _collect_files_from_paths(module_paths)
+    except Exception as exc:
+        logger.exception("Failed collecting files for learning entry: %s", exc)
+        collected_files = []
+
+    modules_data: List[Dict[str, Any]] = []
     for index, module in enumerate(modules):
         module_path = module_paths[index] if index < len(module_paths) else None
-        module_name = os.path.basename(module_path) if module_path else module.get("module_name") if isinstance(module, dict) else None
+        module_name = (
+            os.path.basename(module_path)
+            if module_path
+            else (module.get("module_name") if isinstance(module, dict) else None)
+        )
         module_files = [file for file in collected_files if file["path"].startswith(f"{module_name}/")] if module_name else []
-        modules_data.append({
-            "module_name": module_name,
-            "module_config": module if isinstance(module, dict) else {},
-            "generated_files": module_files,
-        })
+        modules_data.append(
+            {
+                "module_name": module_name,
+                "module_config": module if isinstance(module, dict) else {},
+                "generated_files": module_files,
+            }
+        )
 
-    entry = {
+    entry: Dict[str, Any] = {
         "timestamp": datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc).isoformat(),
         "job_id": job_id,
         "prompt": prompt,
@@ -95,4 +133,7 @@ def append_learning_entry(
     }
 
     entries.append(entry)
-    _write_learning_log(path, entries)
+    try:
+        _write_learning_log(path, entries)
+    except Exception as exc:
+        logger.exception("Failed to write learning log to %s: %s", path, exc)

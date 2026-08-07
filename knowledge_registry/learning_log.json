@@ -1,0 +1,389 @@
+[
+  {
+    "timestamp": "2026-08-06T14:33:09.174273+00:00",
+    "job_id": "19638d72-9125-4cc6-b440-f0516fc0b6c8",
+    "prompt": "User: hi\nAI: Welcome! I'm your Odoo Module Architect, and I'm excited to help you build your next module. 🚀\n\nTo get started, what is the technical name you'd like to give this module?\nPlease use `snake_case` with a lowercase starting character, for example `purchase_extension` or `hr_custom`.\nUser: hotel_managment\nAI: Great choice! `hotel_management` is a clear and descriptive technical name. \n\nNext, let’s define the core **models** this module will introduce. \n\nWhat are the main entities (models) you need? For example:\n- `hotel.room` (to manage rooms)\n- `hotel.reservation` (to track bookings)\n- `hotel.guest` (to store guest details)\n\nList them in `snake_case` (e.g., `hotel.room`), and we’ll build from there.\nUser: hotel.room (to manage rooms)\nhotel.reservation (to track bookings) \nonly that\nAI: Perfect! We’ll start with two foundational models:\n\n- `hotel.room`\n- `hotel.reservation`\n\nNow, let’s focus on the **fields** for `hotel.room`. What attributes should each room have?\n\nCommon examples:\n- `name` (e.g., \"Room 101\")\n- `room_type` (e.g., Single, Double, Suite)\n- `capacity` (number of guests)\n- `price_per_night`\n- `is_available` (boolean)\n\nWhich fields do you need for `hotel.room`?\nUser: name (e.g., \"Room 101\")\nroom_type (e.g., Single, Double, Suite)\ncapacity (number of guests)\nAI: Excellent! The `hotel.room` model will include:\n\n- `name` (Char)\n- `room_type` (Selection: Single, Double, Suite)\n- `capacity` (Integer)\n\nNext, let’s define the **fields for `hotel.reservation`**. What attributes should each booking have?\n\nCommon examples:\n- `guest_name` (or a relation to a guest model later)\n- `check_in` (Datetime)\n- `check_out` (Datetime)\n- `room_id` (Many2one to `hotel.room`)\n- `status` (e.g., Draft, Confirmed, Checked-in, Checked-out)\n- `total_price` (Float, computed or manual)\n\nWhich fields do you need for `hotel.reservation`?\nUser: guest_name (or a relation to a guest model later)\ncheck_in (Datetime)\ncheck_out (Datetime)\nAI: Got it! For now, `hotel.reservation` will include:\n\n- `guest_name` (Char, temporary—we can upgrade to a relation later)\n- `check_in` (Datetime)\n- `check_out` (Datetime)\n\nNext, let’s link the two models. Should `hotel.reservation` include a **Many2one relation** to `hotel.room` (e.g., `room_id`) to track which room is booked?\n\n(Example: `room_id = fields.Many2one('hotel.room', string='Room')`)\nUser: yes should have\nAI: Understood! We’ll add the relation:\n\n- `room_id = fields.Many2one('hotel.room', string='Room')` to `hotel.reservation`.\n\nNow, let’s refine the reservation workflow. Should we add a `status` field to track the booking state?\n\nCommon options:\n- `draft` (initial state)\n- `confirmed`\n- `checked_in`\n- `checked_out`\n- `cancelled`\n\nWould you like this field, and if so, what states should it include?\nUser: no that is all do it now\nAI: Perfect! Here’s the technical summary of your `hotel_management` module so far:\n\n### Models & Fields\n1. **`hotel.room`**\n   - `name` (Char)\n   - `room_type` (Selection: Single, Double, Suite)\n   - `capacity` (Integer)\n\n2. **`hotel.reservation`**\n   - `guest_name` (Char)\n   - `check_in` (Datetime)\n   - `check_out` (Datetime)\n   - `room_id` (Many2one to `hotel.room`)\n\n### Next Steps\nBefore generating the module, let’s confirm:\n- Should we add **menu items** (e.g., *Rooms*, *Reservations*)?\n- Do you need **security groups** (e.g., *Hotel Manager*, *Receptionist*)?\n- Any **actions** (e.g., *Check-in*, *Check-out*) or **views** (tree/form)?\n\nReply with your preferences, and we’ll finalize the manifest and structure.\nUser: add menu items (e.g., Rooms, Reservations)?\nAI: Great! We’ll add two top-level menu items under a parent **Hotel** menu:\n\n- **Rooms** (linked to `hotel.room`)\n- **Reservations** (linked to `hotel.reservation`)\n\nFor clarity, should the parent menu be named:\n1. `Hotel` (e.g., *Hotel > Rooms*, *Hotel > Reservations*)?\n2. Or a custom name like `Hotel Management`?\n\n(Example XML ID: `menu_hotel_root` for the parent, `menu_hotel_rooms` for the child.)",
+    "matched_components": [
+      "auth_component",
+      "hospital_management/v1.0"
+    ],
+    "modules": [
+      {
+        "module_name": "hotel_management",
+        "module_config": {
+          "module_name": "hotel_management",
+          "module_description": "Hotel room and reservation management system",
+          "depends": [
+            "base",
+            "web"
+          ],
+          "odoo_version": "17.0",
+          "models": [
+            {
+              "name": "hotel.room",
+              "description": "Hotel Room",
+              "rec_name": "name",
+              "fields": [
+                {
+                  "name": "name",
+                  "type": "char",
+                  "label": "Room Name",
+                  "required": true,
+                  "relation": null,
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": null,
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                },
+                {
+                  "name": "room_type",
+                  "type": "selection",
+                  "label": "Room Type",
+                  "required": true,
+                  "relation": null,
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": [
+                    [
+                      "single",
+                      "Single"
+                    ],
+                    [
+                      "double",
+                      "Double"
+                    ],
+                    [
+                      "suite",
+                      "Suite"
+                    ]
+                  ],
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                },
+                {
+                  "name": "capacity",
+                  "type": "integer",
+                  "label": "Capacity",
+                  "required": true,
+                  "relation": null,
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": null,
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                }
+              ],
+              "is_inherit": false,
+              "inherit_model": null,
+              "is_customization": false,
+              "search_view": {
+                "name": "hotel_room_search",
+                "fields": [
+                  "name",
+                  "room_type",
+                  "capacity"
+                ],
+                "filters": [
+                  {
+                    "name": "available_rooms",
+                    "string": "Available Rooms",
+                    "domain": "[('id', 'not in', [r.room_id.id for r in env['hotel.reservation'].search([('check_in', '<=', datetime.datetime.now()), ('check_out', '>=', datetime.datetime.now())])])]"
+                  }
+                ],
+                "group_by": [
+                  {
+                    "name": "room_type",
+                    "string": "Room Type"
+                  }
+                ]
+              },
+              "tree_view_fields": [
+                "name",
+                "room_type",
+                "capacity"
+              ],
+              "form_view_fields": [
+                "name",
+                "room_type",
+                "capacity"
+              ],
+              "kanban_view": null,
+              "calendar_view": null,
+              "dashboard_view": null,
+              "print_reports": null
+            },
+            {
+              "name": "hotel.reservation",
+              "description": "Hotel Reservation",
+              "rec_name": "guest_name",
+              "fields": [
+                {
+                  "name": "guest_name",
+                  "type": "char",
+                  "label": "Guest Name",
+                  "required": true,
+                  "relation": null,
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": null,
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                },
+                {
+                  "name": "check_in",
+                  "type": "datetime",
+                  "label": "Check-in Date",
+                  "required": true,
+                  "relation": null,
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": null,
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                },
+                {
+                  "name": "check_out",
+                  "type": "datetime",
+                  "label": "Check-out Date",
+                  "required": true,
+                  "relation": null,
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": null,
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                },
+                {
+                  "name": "room_id",
+                  "type": "many2one",
+                  "label": "Room",
+                  "required": true,
+                  "relation": "hotel.room",
+                  "inverse_name": null,
+                  "relation_table": null,
+                  "selection_options": null,
+                  "is_compute": false,
+                  "compute_code": null,
+                  "depends_fields": null
+                }
+              ],
+              "is_inherit": false,
+              "inherit_model": null,
+              "is_customization": false,
+              "search_view": {
+                "name": "hotel_reservation_search",
+                "fields": [
+                  "guest_name",
+                  "room_id",
+                  "check_in",
+                  "check_out"
+                ],
+                "filters": [
+                  {
+                    "name": "today_checkins",
+                    "string": "Today's Check-ins",
+                    "domain": "[('check_in', '>=', datetime.datetime.combine(datetime.date.today(), datetime.time.min)), ('check_in', '<=', datetime.datetime.combine(datetime.date.today(), datetime.time.max))]"
+                  },
+                  {
+                    "name": "today_checkouts",
+                    "string": "Today's Check-outs",
+                    "domain": "[('check_out', '>=', datetime.datetime.combine(datetime.date.today(), datetime.time.min)), ('check_out', '<=', datetime.datetime.combine(datetime.date.today(), datetime.time.max))]"
+                  }
+                ],
+                "group_by": [
+                  {
+                    "name": "room_id",
+                    "string": "Room"
+                  }
+                ]
+              },
+              "tree_view_fields": [
+                "guest_name",
+                "room_id",
+                "check_in",
+                "check_out"
+              ],
+              "form_view_fields": [
+                "guest_name",
+                "room_id",
+                "check_in",
+                "check_out"
+              ],
+              "kanban_view": null,
+              "calendar_view": null,
+              "dashboard_view": null,
+              "print_reports": null
+            }
+          ],
+          "actions": [
+            {
+              "name": "Rooms",
+              "res_model": "hotel.room",
+              "view_mode": "tree,form",
+              "domain": null,
+              "help_text": "Manage hotel rooms"
+            },
+            {
+              "name": "Reservations",
+              "res_model": "hotel.reservation",
+              "view_mode": "tree,form,calendar",
+              "domain": "[]",
+              "help_text": "Manage hotel reservations"
+            }
+          ],
+          "menus": [
+            {
+              "name": "Hotel",
+              "sequence": 10,
+              "action_xml_id": null,
+              "parent_xml_id": null
+            },
+            {
+              "name": "Rooms",
+              "sequence": 10,
+              "action_xml_id": "rooms_action",
+              "parent_xml_id": "hotel_management.menu_hotel_root"
+            },
+            {
+              "name": "Reservations",
+              "sequence": 20,
+              "action_xml_id": "reservations_action",
+              "parent_xml_id": "hotel_management.menu_hotel_root"
+            }
+          ],
+          "security_groups": [
+            {
+              "name": "Hotel Manager",
+              "description": "Full access to hotel management",
+              "category": "Hotel/",
+              "implied_ids": null,
+              "rules": [
+                {
+                  "model_name": "hotel.room",
+                  "perm_read": true,
+                  "perm_write": true,
+                  "perm_create": true,
+                  "perm_unlink": true
+                },
+                {
+                  "model_name": "hotel.reservation",
+                  "perm_read": true,
+                  "perm_write": true,
+                  "perm_create": true,
+                  "perm_unlink": true
+                }
+              ]
+            },
+            {
+              "name": "Receptionist",
+              "description": "Limited access to hotel management",
+              "category": "Hotel/",
+              "implied_ids": [
+                "hotel_management.group_hotel_manager"
+              ],
+              "rules": [
+                {
+                  "model_name": "hotel.room",
+                  "perm_read": true,
+                  "perm_write": false,
+                  "perm_create": false,
+                  "perm_unlink": false
+                },
+                {
+                  "model_name": "hotel.reservation",
+                  "perm_read": true,
+                  "perm_write": true,
+                  "perm_create": true,
+                  "perm_unlink": false
+                }
+              ]
+            }
+          ],
+          "git_deploy_target": "local_zip",
+          "repository_url": null,
+          "matched_components": [
+            "auth_component",
+            "hospital_management/v1.0"
+          ]
+        },
+        "generated_files": [
+          {
+            "name": "__init__.py",
+            "path": "hotel_management/__init__.py",
+            "content": "# -*- coding: utf-8 -*-\nfrom . import models"
+          },
+          {
+            "name": "__manifest__.py",
+            "path": "hotel_management/__manifest__.py",
+            "content": "# -*- coding: utf-8 -*-\n{\n    'name': 'hotel_management',\n    'version': '17.0',\n    'category': 'Tools',\n    'summary': 'Hotel room and reservation management system',\n    'author': 'Generated Module',\n    'depends': ['base', 'web'],\n    'data': [\n        'security/ir.model.access.csv',\n        'security/security.xml',\n        'views/hotel_room_views.xml',\n        'views/hotel_reservation_views.xml',\n        'views/actions.xml',\n        'views/menus.xml',\n    ],\n    'installable': True,\n    'application': False,\n}"
+          },
+          {
+            "name": "001-use-hospital-module.md",
+            "path": "hotel_management/docs/001-use-hospital-module.md",
+            "content": "# ADR 001: Hospital Module Architecture\n\nDecision: Use a modular hospital management component with separate patient, appointment, and billing services.\n\nConsequences:\n- Easier to extend for telemedicine and lab integration.\n- Supports versioned component upgrades.\n"
+          },
+          {
+            "name": "business_rules.md",
+            "path": "hotel_management/docs/business_rules.md",
+            "content": "# Hospital Management Business Rules\n\n- Patients must have a unique medical record number.\n- Appointments require a valid doctor and room assignment.\n- Billing invoices are generated after patient discharge.\n- Notifications are sent for appointment reminders and lab results.\n"
+          },
+          {
+            "name": "__init__.py",
+            "path": "hotel_management/models/__init__.py",
+            "content": "# -*- coding: utf-8 -*-\nfrom . import hotel_room\nfrom . import hotel_reservation\n"
+          },
+          {
+            "name": "hotel_reservation.py",
+            "path": "hotel_management/models/hotel_reservation.py",
+            "content": "# -*- coding: utf-8 -*-\nfrom odoo import models, fields, api\n\nclass HotelReservation(models.Model):\n    _name = 'hotel.reservation'\n    _description = 'Hotel Reservation'\n    _rec_name = 'guest_name'\n\n    guest_name = fields.Char(\n        string='Guest Name',\n        required=True,\n    )\n    check_in = fields.Datetime(\n        string='Check-in Date',\n        required=True,\n    )\n    check_out = fields.Datetime(\n        string='Check-out Date',\n        required=True,\n    )\n    room_id = fields.Many2one(\n        comodel_name='hotel.room',\n        string='Room',\n        required=True,\n    )\n"
+          },
+          {
+            "name": "hotel_room.py",
+            "path": "hotel_management/models/hotel_room.py",
+            "content": "# -*- coding: utf-8 -*-\nfrom odoo import models, fields, api\n\nclass HotelRoom(models.Model):\n    _name = 'hotel.room'\n    _description = 'Hotel Room'\n    _rec_name = 'name'\n\n    name = fields.Char(\n        string='Room Name',\n        required=True,\n    )\n    room_type = fields.Selection(\n        selection=[['single', 'Single'], ['double', 'Double'], ['suite', 'Suite']],\n        string='Room Type',\n        required=True,\n    )\n    capacity = fields.Integer(\n        string='Capacity',\n        required=True,\n    )\n"
+          },
+          {
+            "name": "ir.model.access.csv",
+            "path": "hotel_management/security/ir.model.access.csv",
+            "content": "id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink\naccess_hotel_room_user,Hotel Room Access,model_hotel_room,base.group_user,1,1,1,1\naccess_hotel_reservation_user,Hotel Reservation Access,model_hotel_reservation,base.group_user,1,1,1,1\n"
+          },
+          {
+            "name": "security.xml",
+            "path": "hotel_management/security/security.xml",
+            "content": "<odoo>\n    <data noupdate=\"1\">\n        <record id=\"group_hotel_manager\" model=\"res.groups\">\n            <field name=\"name\">Hotel/Hotel Manager</field>\n            <field name=\"comment\">Full access to hotel management</field>\n            <field name=\"implied_ids\" eval=\"[(4, ref('base.group_user'))]\"/>\n        </record>\n\n        <record id=\"access_hotel_manager_hotel_room\" model=\"ir.model.access\">\n            <field name=\"name\">Hotel Manager Access to hotel.room</field>\n            <field name=\"model_id\" ref=\"hotel_room\"/>\n            <field name=\"group_id\" ref=\"group_hotel_manager\"/>\n            <field name=\"perm_read\">True</field>\n            <field name=\"perm_write\">True</field>\n            <field name=\"perm_create\">True</field>\n            <field name=\"perm_unlink\">True</field>\n        </record>\n        <record id=\"access_hotel_manager_hotel_reservation\" model=\"ir.model.access\">\n            <field name=\"name\">Hotel Manager Access to hotel.reservation</field>\n            <field name=\"model_id\" ref=\"hotel_reservation\"/>\n            <field name=\"group_id\" ref=\"group_hotel_manager\"/>\n            <field name=\"perm_read\">True</field>\n            <field name=\"perm_write\">True</field>\n            <field name=\"perm_create\">True</field>\n            <field name=\"perm_unlink\">True</field>\n        </record>\n        <record id=\"group_receptionist\" model=\"res.groups\">\n            <field name=\"name\">Hotel/Receptionist</field>\n            <field name=\"comment\">Limited access to hotel management</field>\n            <field name=\"implied_ids\" eval=\"[(4, ref('base.group_user')), (4, ref('hotel_management.group_hotel_manager'))]\"/>\n        </record>\n\n        <record id=\"access_receptionist_hotel_room\" model=\"ir.model.access\">\n            <field name=\"name\">Receptionist Access to hotel.room</field>\n            <field name=\"model_id\" ref=\"hotel_room\"/>\n            <field name=\"group_id\" ref=\"group_receptionist\"/>\n            <field name=\"perm_read\">True</field>\n            <field name=\"perm_write\">False</field>\n            <field name=\"perm_create\">False</field>\n            <field name=\"perm_unlink\">False</field>\n        </record>\n        <record id=\"access_receptionist_hotel_reservation\" model=\"ir.model.access\">\n            <field name=\"name\">Receptionist Access to hotel.reservation</field>\n            <field name=\"model_id\" ref=\"hotel_reservation\"/>\n            <field name=\"group_id\" ref=\"group_receptionist\"/>\n            <field name=\"perm_read\">True</field>\n            <field name=\"perm_write\">True</field>\n            <field name=\"perm_create\">True</field>\n            <field name=\"perm_unlink\">False</field>\n        </record>\n    </data>\n</odoo>"
+          },
+          {
+            "name": "actions.xml",
+            "path": "hotel_management/views/actions.xml",
+            "content": "<odoo>\n    <data>\n        <record id=\"rooms_action\" model=\"ir.actions.act_window\">\n            <field name=\"name\">Rooms</field>\n            <field name=\"res_model\">hotel.room</field>\n            <field name=\"view_mode\">tree,form</field>\n            <field name=\"help\" type=\"html\">\n                <p class=\"o_view_nocontent_smiling_face\">Manage hotel rooms</p>\n            </field>\n        </record>\n        <record id=\"reservations_action\" model=\"ir.actions.act_window\">\n            <field name=\"name\">Reservations</field>\n            <field name=\"res_model\">hotel.reservation</field>\n            <field name=\"view_mode\">tree,form,calendar</field>\n            <field name=\"domain\">[]</field>\n            <field name=\"help\" type=\"html\">\n                <p class=\"o_view_nocontent_smiling_face\">Manage hotel reservations</p>\n            </field>\n        </record>\n    </data>\n</odoo>"
+          },
+          {
+            "name": "hotel_reservation_views.xml",
+            "path": "hotel_management/views/hotel_reservation_views.xml",
+            "content": "<odoo>\n    <data>\n        <!-- Tree View for Hotel Reservation -->\n        <record id=\"hotel_reservation_tree_view\" model=\"ir.ui.view\">\n            <field name=\"name\">hotel.reservation.tree</field>\n            <field name=\"model\">hotel.reservation</field>\n            <field name=\"arch\" type=\"xml\">\n                <tree>\n                    <field name=\"guest_name\"/>\n                    <field name=\"room_id\"/>\n                    <field name=\"check_in\"/>\n                    <field name=\"check_out\"/>\n                </tree>\n            </field>\n        </record>\n\n        <!-- Form View for Hotel Reservation -->\n        <record id=\"hotel_reservation_form_view\" model=\"ir.ui.view\">\n            <field name=\"name\">hotel.reservation.form</field>\n            <field name=\"model\">hotel.reservation</field>\n            <field name=\"arch\" type=\"xml\">\n                <form>\n                    <sheet>\n                        <group>\n                            <field name=\"guest_name\"/>\n                            <field name=\"room_id\"/>\n                            <field name=\"check_in\"/>\n                            <field name=\"check_out\"/>\n                        </group>\n                    </sheet>\n                </form>\n            </field>\n        </record>\n\n        <!-- Search View for Hotel Reservation -->\n        <record id=\"hotel_reservation_search_view\" model=\"ir.ui.view\">\n            <field name=\"name\">hotel.reservation.search</field>\n            <field name=\"model\">hotel.reservation</field>\n            <field name=\"arch\" type=\"xml\">\n                <search>\n                    <field name=\"guest_name\"/>\n                    <field name=\"room_id\"/>\n                    <field name=\"check_in\"/>\n                    <field name=\"check_out\"/>\n                    <separator/>\n                    <filter name=\"today_checkins\" string=\"Today's Check-ins\" domain=\"[('check_in', '>=', datetime.datetime.combine(datetime.date.today(), datetime.time.min)), ('check_in', '<=', datetime.datetime.combine(datetime.date.today(), datetime.time.max))]\"/>\n                    <filter name=\"today_checkouts\" string=\"Today's Check-outs\" domain=\"[('check_out', '>=', datetime.datetime.combine(datetime.date.today(), datetime.time.min)), ('check_out', '<=', datetime.datetime.combine(datetime.date.today(), datetime.time.max))]\"/>\n                    <group expand=\"0\" string=\"Group By\">\n                        <filter name=\"room_id\" string=\"Room\" context=\"{'group_by': 'room_id'}\"/>\n                    </group>\n                </search>\n            </field>\n        </record>\n\n\n\n\n    </data>\n</odoo>"
+          },
+          {
+            "name": "hotel_room_views.xml",
+            "path": "hotel_management/views/hotel_room_views.xml",
+            "content": "<odoo>\n    <data>\n        <!-- Tree View for Hotel Room -->\n        <record id=\"hotel_room_tree_view\" model=\"ir.ui.view\">\n            <field name=\"name\">hotel.room.tree</field>\n            <field name=\"model\">hotel.room</field>\n            <field name=\"arch\" type=\"xml\">\n                <tree>\n                    <field name=\"name\"/>\n                    <field name=\"room_type\"/>\n                    <field name=\"capacity\"/>\n                </tree>\n            </field>\n        </record>\n\n        <!-- Form View for Hotel Room -->\n        <record id=\"hotel_room_form_view\" model=\"ir.ui.view\">\n            <field name=\"name\">hotel.room.form</field>\n            <field name=\"model\">hotel.room</field>\n            <field name=\"arch\" type=\"xml\">\n                <form>\n                    <sheet>\n                        <group>\n                            <field name=\"name\"/>\n                            <field name=\"room_type\"/>\n                            <field name=\"capacity\"/>\n                        </group>\n                    </sheet>\n                </form>\n            </field>\n        </record>\n\n        <!-- Search View for Hotel Room -->\n        <record id=\"hotel_room_search_view\" model=\"ir.ui.view\">\n            <field name=\"name\">hotel.room.search</field>\n            <field name=\"model\">hotel.room</field>\n            <field name=\"arch\" type=\"xml\">\n                <search>\n                    <field name=\"name\"/>\n                    <field name=\"room_type\"/>\n                    <field name=\"capacity\"/>\n                    <separator/>\n                    <filter name=\"available_rooms\" string=\"Available Rooms\" domain=\"[('id', 'not in', [r.room_id.id for r in env['hotel.reservation'].search([('check_in', '<=', datetime.datetime.now()), ('check_out', '>=', datetime.datetime.now())])])]\"/>\n                    <group expand=\"0\" string=\"Group By\">\n                        <filter name=\"room_type\" string=\"Room Type\" context=\"{'group_by': 'room_type'}\"/>\n                    </group>\n                </search>\n            </field>\n        </record>\n\n\n\n\n    </data>\n</odoo>"
+          },
+          {
+            "name": "menus.xml",
+            "path": "hotel_management/views/menus.xml",
+            "content": "<odoo>\n    <data>\n        <menuitem id=\"hotel_menu\"\n                  name=\"Hotel\"\n                  sequence=\"10\"/>\n        <menuitem id=\"rooms_menu\"\n                  name=\"Rooms\"\n                  parent=\"hotel_management.menu_hotel_root\"\n                  action=\"rooms_action\"\n                  sequence=\"10\"/>\n        <menuitem id=\"reservations_menu\"\n                  name=\"Reservations\"\n                  parent=\"hotel_management.menu_hotel_root\"\n                  action=\"reservations_action\"\n                  sequence=\"20\"/>\n    </data>\n</odoo>"
+          }
+        ]
+      }
+    ],
+    "notes": [
+      "Generated module packaged as ZIP."
+    ]
+  }
+]
