@@ -1,10 +1,14 @@
 import os
 import json
 import logging
+from datetime import datetime, timedelta
 from typing import Any, Optional
+from dotenv import load_dotenv
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
+
+load_dotenv()
 
 SUPABASE_URL = os.getenv("SUPABASE_URL", "").strip()
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "").strip()
@@ -34,6 +38,35 @@ class SupabaseService:
             }).execute()
         except Exception as exc:
             logger.exception("Supabase chat insert failed: %s", exc)
+
+    def log_api_usage(self, provider_name: str, model_name: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, status: str, job_id: Optional[str] = None) -> None:
+        if not self.is_enabled():
+            return
+        try:
+            data = {
+                "provider_name": provider_name,
+                "model_name": model_name,
+                "prompt_tokens": int(prompt_tokens or 0),
+                "completion_tokens": int(completion_tokens or 0),
+                "total_tokens": int(total_tokens or 0),
+                "status": status,
+            }
+            if job_id:
+                data["job_id"] = job_id
+            self.client.table("api_usage_logs").insert(data).execute()
+        except Exception as exc:
+            logger.exception("Supabase usage log insert failed: %s", exc)
+
+    def get_usage_logs(self, days: int = 30) -> list[dict]:
+        if not self.is_enabled():
+            return []
+        try:
+            since = (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
+            result = self.client.table("api_usage_logs").select("*").gte("created_at", since).order("created_at", desc=True).execute()
+            return getattr(result, "data", []) or []
+        except Exception as exc:
+            logger.exception("Supabase usage log fetch failed: %s", exc)
+            return []
 
     def upsert_generation_job(self, job_id: str, status: str, progress: int, message: str, module_config: Optional[dict], schema_preview: Optional[dict], zip_url: Optional[str] = None, github_url: Optional[str] = None, chat_history: Optional[list[dict]] = None) -> None:
         if not self.is_enabled():

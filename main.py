@@ -10,6 +10,7 @@ import shutil
 import io
 import zipfile
 import re
+from datetime import datetime
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -783,7 +784,7 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str, odoo_vers
         )
         await asyncio.sleep(0)
 
-        payload = await ai_service.analyze_requirements(user_prompt, odoo_version)
+        payload = await ai_service.analyze_requirements(user_prompt, odoo_version, job_id=job_id)
 
         payload_data = payload.model_dump()
         modules = payload_data.get("modules", [])
@@ -963,7 +964,7 @@ async def chat_requirements(request: ChatRequest):
                     "role": "system",
                     "content": "Current module configuration context:\n" + json.dumps(existing_job.get("module_config"), ensure_ascii=False),
                 })
-            response = await ai_service.chat_requirements(payload_for_ai)
+            response = await ai_service.chat_requirements(payload_for_ai, job_id=request.job_id)
             supabase_service.upsert_generation_job(
                 job_id=request.job_id,
                 status=existing_job.get("status", "running") if existing_job else "running",
@@ -976,7 +977,7 @@ async def chat_requirements(request: ChatRequest):
         else:
             if language_hint:
                 payload.insert(0, {"role": "system", "content": language_hint})
-            response = await ai_service.chat_requirements(payload)
+            response = await ai_service.chat_requirements(payload, job_id=request.job_id)
 
         for item in request.messages:
             supabase_service.insert_chat_message(None, item.role, item.content)
@@ -1061,6 +1062,82 @@ async def get_history():
     return {
         "jobs": jobs_list,
         "chat_history": chat_list,
+    }
+
+
+def _usage_date(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    try:
+        if isinstance(value, datetime):
+            return value.strftime("%Y-%m-%d")
+        text = str(value).strip().replace("Z", "+00:00")
+        return datetime.fromisoformat(text).strftime("%Y-%m-%d")
+    except Exception:
+        text = str(value).strip()
+        return text[:10] if len(text) >= 10 else None
+
+
+@app.get(
+    "/api/stats/usage",
+    summary="Daily token usage aggregated by provider",
+    description=(
+        "Returns usage metrics from the `api_usage_logs` table aggregated by day "
+        "and grouped by `provider_name`, ready for the 'Usage Over Time' line charts."
+    ),
+)
+async def get_usage_stats(days: int = 30):
+    if not supabase_service.is_enabled():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"success": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."},
+        )
+
+    rows = supabase_service.get_usage_logs(days=days)
+
+    daily: dict[str, dict] = {}
+    for row in rows:
+        date_str = _usage_date(row.get("created_at"))
+        if not date_str:
+            continue
+        provider_name = row.get("provider_name") or "unknown"
+        try:
+            prompt_tokens = int(row.get("prompt_tokens") or 0)
+            completion_tokens = int(row.get("completion_tokens") or 0)
+            total_tokens = int(row.get("total_tokens") or (prompt_tokens + completion_tokens))
+        except (TypeError, ValueError):
+            prompt_tokens = completion_tokens = total_tokens = 0
+
+        day = daily.setdefault(date_str, {"date": date_str, "requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "providers": {}})
+        day["requests"] += 1
+        day["prompt_tokens"] += prompt_tokens
+        day["completion_tokens"] += completion_tokens
+        day["total_tokens"] += total_tokens
+
+        provider_entry = day["providers"].setdefault(provider_name, {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        provider_entry["requests"] += 1
+        provider_entry["prompt_tokens"] += prompt_tokens
+        provider_entry["completion_tokens"] += completion_tokens
+        provider_entry["total_tokens"] += total_tokens
+
+    daily_list = sorted(daily.values(), key=lambda item: item["date"])
+
+    totals = {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "providers": {}}
+    for day in daily_list:
+        totals["requests"] += day["requests"]
+        totals["prompt_tokens"] += day["prompt_tokens"]
+        totals["completion_tokens"] += day["completion_tokens"]
+        totals["total_tokens"] += day["total_tokens"]
+        for provider_name, entry in day["providers"].items():
+            provider_total = totals["providers"].setdefault(provider_name, {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            for key in ("requests", "prompt_tokens", "completion_tokens", "total_tokens"):
+                provider_total[key] += entry[key]
+
+    return {
+        "success": True,
+        "days": days,
+        "daily": daily_list,
+        "totals": totals,
     }
 
 

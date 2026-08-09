@@ -20,6 +20,7 @@ from app.models.schemas import ChatResponse, ComponentRegistryEntry, GeneratorPa
 from app.services.cache_service import RedisCacheService
 from app.services.component_registry_service import ComponentRegistryService
 from app.services.rag_service import RAGService
+from app.services.supabase_service import supabase_service
 
 Provider = Dict[str, Any]
 
@@ -122,7 +123,39 @@ class AIService:
             base_url += '/'
         return OpenAI(api_key=provider["key"], base_url=base_url)
 
-    def _call_provider(self, provider: Provider, prompt: str, odoo_version: Optional[str] = None) -> str:
+    def _log_usage(self, provider: Provider, response: Any, status: str = "success", job_id: Optional[str] = None) -> None:
+        """Persist token usage metrics returned by the OpenAI client.
+
+        Wrapped in try-except so a logging failure never breaks generation.
+        """
+        try:
+            usage = getattr(response, "usage", None)
+            if usage is None:
+                logger.debug("No usage metadata returned by %s", provider.get("name"))
+                return
+
+            def _usage_value(attr: str) -> int:
+                if isinstance(usage, dict):
+                    return int(usage.get(attr, 0) or 0)
+                return int(getattr(usage, attr, 0) or 0)
+
+            prompt_tokens = _usage_value("prompt_tokens")
+            completion_tokens = _usage_value("completion_tokens")
+            total_tokens = _usage_value("total_tokens") or (prompt_tokens + completion_tokens)
+
+            supabase_service.log_api_usage(
+                provider_name=provider.get("name", "unknown"),
+                model_name=provider.get("model", "unknown"),
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                total_tokens=total_tokens,
+                status=status,
+                job_id=job_id,
+            )
+        except Exception as exc:
+            logger.exception("Failed to log API usage for %s: %s", provider.get("name"), exc)
+
+    def _call_provider(self, provider: Provider, prompt: str, odoo_version: Optional[str] = None, job_id: Optional[str] = None) -> str:
         """Send the prompt to a single provider and return raw JSON content."""
         version = (odoo_version or "17.0").strip() or "17.0"
         logger.debug("Calling provider %s for Odoo %s", provider.get("name"), version)
@@ -149,6 +182,7 @@ class AIService:
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Gateway returned empty content.")
+        self._log_usage(provider, response, status="success", job_id=job_id)
         return content
 
     def test_provider(self, provider: Provider, user_prompt: str) -> ProviderTestResult:
@@ -198,7 +232,7 @@ class AIService:
         """Test every configured gateway independently."""
         return [self.test_provider(provider, user_prompt) for provider in self.providers]
 
-    async def chat_requirements(self, messages: List[Dict[str, str]]) -> ChatResponse:
+    async def chat_requirements(self, messages: List[Dict[str, str]], job_id: Optional[str] = None) -> ChatResponse:
         """Gather module requirements via conversational Q&A before generation."""
         cache_payload = json.dumps(messages, ensure_ascii=False, sort_keys=True)
         cache_key = self.cache_service.build_key("ai_chat", cache_payload)
@@ -212,7 +246,7 @@ class AIService:
 
             try:
                 logger.info(f"Chat via gateway: {provider['name']}")
-                content = self._call_provider_chat(provider, messages)
+                content = self._call_provider_chat(provider, messages, job_id=job_id)
                 response = self._parse_chat_response(content)
                 await self._ensure_awaited(
                     self.cache_service.set_json(cache_key, response.model_dump(mode="json"), ttl=900)
@@ -224,7 +258,7 @@ class AIService:
 
         raise Exception("All AI gateways failed for chat. Please check your keys and connection.")
 
-    def _call_provider_chat(self, provider: Provider, messages: List[Dict[str, str]]) -> str:
+    def _call_provider_chat(self, provider: Provider, messages: List[Dict[str, str]], job_id: Optional[str] = None) -> str:
         client = self._get_client(provider)
         response = client.chat.completions.create(
             model=provider["model"],
@@ -257,6 +291,7 @@ class AIService:
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Gateway returned empty chat content.")
+        self._log_usage(provider, response, status="success", job_id=job_id)
         return content
 
     async def _ensure_awaited(self, value: Any) -> Any:
@@ -277,7 +312,7 @@ class AIService:
         except json.JSONDecodeError as e:
             raise ValueError(f"Chat response was not valid JSON: {e}")
 
-    async def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None) -> GeneratorPayload:
+    async def analyze_requirements(self, user_prompt: str, odoo_version: Optional[str] = None, job_id: Optional[str] = None) -> GeneratorPayload:
         matching_components = self._find_matching_components(user_prompt)
         component_context = self._build_component_context(matching_components)
         if component_context:
@@ -301,7 +336,7 @@ class AIService:
 
             try:
                 logger.info(f"Attempting to use gateway: {provider['name']}")
-                content = self._call_provider(provider, prompt, odoo_version)
+                content = self._call_provider(provider, prompt, odoo_version, job_id=job_id)
                 payload = self._parse_response(content)
                 self.cache_service.set_json(cache_key, payload.model_dump(mode="json"), ttl=900)
                 return self._ensure_generator_payload(payload)
