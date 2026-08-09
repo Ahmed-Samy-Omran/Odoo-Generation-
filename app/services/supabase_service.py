@@ -57,15 +57,49 @@ class SupabaseService:
         except Exception as exc:
             logger.exception("Supabase usage log insert failed: %s", exc)
 
-    def get_usage_logs(self, days: int = 30) -> list[dict]:
+    def get_usage_logs(self, days: int = 30, model: Optional[str] = None) -> list[dict]:
         if not self.is_enabled():
             return []
         try:
             since = (datetime.utcnow() - timedelta(days=days)).isoformat() + "Z"
-            result = self.client.table("api_usage_logs").select("*").gte("created_at", since).order("created_at", desc=True).execute()
+            query = self.client.table("api_usage_logs").select("*").gte("created_at", since)
+            if model:
+                query = query.eq("model_name", model.strip())
+            result = query.order("created_at", desc=True).execute()
             return getattr(result, "data", []) or []
         except Exception as exc:
             logger.exception("Supabase usage log fetch failed: %s", exc)
+            return []
+
+    def delete_usage_logs_by_provider(self, provider_name: str) -> int:
+        if not self.is_enabled():
+            return 0
+        try:
+            result = self.client.table("api_usage_logs").delete().eq("provider_name", provider_name).execute()
+            return len(getattr(result, "data", []) or [])
+        except Exception as exc:
+            logger.exception("Supabase usage log delete failed: %s", exc)
+            return 0
+
+    def get_usage_logs_today(self) -> list[dict]:
+        if not self.is_enabled():
+            return []
+        try:
+            since = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat() + "Z"
+            result = self.client.table("api_usage_logs").select("*").gte("created_at", since).execute()
+            return getattr(result, "data", []) or []
+        except Exception as exc:
+            logger.exception("Supabase today usage fetch failed: %s", exc)
+            return []
+
+    def get_model_quotas(self) -> list[dict]:
+        if not self.is_enabled():
+            return []
+        try:
+            result = self.client.table("model_quotas").select("*").execute()
+            return getattr(result, "data", []) or []
+        except Exception as exc:
+            logger.exception("Supabase model quotas fetch failed: %s", exc)
             return []
 
     def upsert_generation_job(self, job_id: str, status: str, progress: int, message: str, module_config: Optional[dict], schema_preview: Optional[dict], zip_url: Optional[str] = None, github_url: Optional[str] = None, chat_history: Optional[list[dict]] = None) -> None:

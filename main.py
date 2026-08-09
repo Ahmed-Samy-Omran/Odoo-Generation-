@@ -1078,29 +1078,128 @@ def _usage_date(value: Optional[str]) -> Optional[str]:
         return text[:10] if len(text) >= 10 else None
 
 
+def _row_model_name(row: dict) -> str:
+    model_name = row.get("model_name")
+    if model_name is None:
+        return "unknown"
+    return str(model_name).strip() or "unknown"
+
+
+def _compute_quota_stats(today_rows: list[dict]) -> tuple[list[dict], list[dict]]:
+    """Compute daily quota usage for every model defined in the `model_quotas` table.
+
+    - `limit_type = "requests"`: compare today's request count against `daily_limit`
+    - `limit_type = "tokens"`: compare today's `total_tokens` sum against `daily_limit`
+
+    "Today" is derived from the `created_at` timestamp of the logs (UTC day boundary),
+    so usage resets automatically each day.
+
+    Returns a tuple of:
+      - `models`: per-model intelligence cards data (model_name, today_usage, success_rate,
+        remaining_quota, unit, percent_used)
+      - `quota_status`: per-model quota row (model_name, current_usage, limit, unit, percent_used)
+    """
+    quotas = supabase_service.get_model_quotas()
+    if not quotas:
+        return [], []
+
+    today_usage: dict[str, dict] = {}
+    for row in today_rows:
+        model_name = _row_model_name(row)
+        try:
+            total_tokens = int(row.get("total_tokens") or 0)
+        except (TypeError, ValueError):
+            total_tokens = 0
+        is_success = str(row.get("status") or "success").strip() == "success"
+        entry = today_usage.setdefault(model_name, {"requests": 0, "success": 0, "tokens": 0})
+        entry["requests"] += 1
+        entry["tokens"] += total_tokens
+        if is_success:
+            entry["success"] += 1
+
+    models: list[dict] = []
+    quota_status: list[dict] = []
+    for quota in quotas:
+        model_name = str(quota.get("model_name") or "").strip()
+        limit_type = str(quota.get("limit_type") or "requests").strip().lower()
+        try:
+            daily_limit = float(quota.get("daily_limit") or 0)
+        except (TypeError, ValueError):
+            daily_limit = 0
+        if not model_name or daily_limit <= 0:
+            continue
+        usage = today_usage.get(model_name, {"requests": 0, "success": 0, "tokens": 0})
+        if limit_type == "tokens":
+            current_usage = usage.get("tokens", 0)
+            unit = "Tokens"
+        else:
+            current_usage = usage.get("requests", 0)
+            unit = "Requests"
+        total_calls = usage.get("requests", 0)
+        success_rate = round((usage.get("success", 0) / total_calls) * 100, 2) if total_calls > 0 else 0.0
+        percent_used = round((current_usage / daily_limit) * 100, 2)
+        models.append({
+            "model_name": model_name,
+            "today_usage": current_usage,
+            "success_rate": success_rate,
+            "remaining_quota": int(daily_limit) - current_usage,
+            "unit": unit,
+            "percent_used": percent_used,
+        })
+        quota_status.append({
+            "model_name": model_name,
+            "current_usage": current_usage,
+            "limit": int(daily_limit),
+            "unit": unit,
+            "percent_used": percent_used,
+        })
+    return models, quota_status
+
+
 @app.get(
     "/api/stats/usage",
-    summary="Daily token usage aggregated by provider",
+    summary="Daily token usage aggregated by provider and model",
     description=(
         "Returns usage metrics from the `api_usage_logs` table aggregated by day "
-        "and grouped by `provider_name`, ready for the 'Usage Over Time' line charts."
+        "and grouped by `provider_name` and `model_name`, ready for the 'Usage Over Time' "
+        "line charts and 'Token Distribution by Model' views. Pass an optional `model` "
+        "query parameter to filter by model name; read `model_names` for the distinct "
+        "models in the window and `models_breakdown` for per-model totals.\n\n"
+        "The `models` array holds Model Intelligence Card data for every quota-tracked "
+        "model: `model_name`, `today_usage` (Tokens or Requests per `limit_type`), "
+        "`success_rate`, `remaining_quota` (`daily_limit` - today's usage), `unit` and "
+        "`percent_used`. The `quota_status` array mirrors the same computation. Usage is "
+        "counted against today's `created_at` boundary, so it resets automatically each day."
     ),
 )
-async def get_usage_stats(days: int = 30):
+async def get_usage_stats(days: int = 30, model: Optional[str] = None):
     if not supabase_service.is_enabled():
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"success": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."},
         )
 
-    rows = supabase_service.get_usage_logs(days=days)
+    normalized_model = model.strip() if model else None
+    rows = supabase_service.get_usage_logs(days=days, model=normalized_model)
 
+    model_names: dict[str, bool] = {}
+    if normalized_model:
+        all_rows = supabase_service.get_usage_logs(days=days)
+        for row in all_rows:
+            model_names[_row_model_name(row)] = True
+    else:
+        for row in rows:
+            model_names[_row_model_name(row)] = True
+
+    model_providers: dict[str, dict[str, int]] = {}
     daily: dict[str, dict] = {}
     for row in rows:
         date_str = _usage_date(row.get("created_at"))
         if not date_str:
             continue
         provider_name = row.get("provider_name") or "unknown"
+        model_name = _row_model_name(row)
+        is_success = str(row.get("status") or "success").strip() == "success"
         try:
             prompt_tokens = int(row.get("prompt_tokens") or 0)
             completion_tokens = int(row.get("completion_tokens") or 0)
@@ -1108,37 +1207,89 @@ async def get_usage_stats(days: int = 30):
         except (TypeError, ValueError):
             prompt_tokens = completion_tokens = total_tokens = 0
 
-        day = daily.setdefault(date_str, {"date": date_str, "requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "providers": {}})
+        model_provider_counts = model_providers.setdefault(model_name, {})
+        model_provider_counts[provider_name] = model_provider_counts.get(provider_name, 0) + 1
+
+        day = daily.setdefault(date_str, {"date": date_str, "requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "providers": {}, "models": {}})
         day["requests"] += 1
+        if is_success:
+            day["success"] += 1
         day["prompt_tokens"] += prompt_tokens
         day["completion_tokens"] += completion_tokens
         day["total_tokens"] += total_tokens
 
-        provider_entry = day["providers"].setdefault(provider_name, {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        provider_entry = day["providers"].setdefault(provider_name, {"requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
         provider_entry["requests"] += 1
+        if is_success:
+            provider_entry["success"] += 1
         provider_entry["prompt_tokens"] += prompt_tokens
         provider_entry["completion_tokens"] += completion_tokens
         provider_entry["total_tokens"] += total_tokens
 
+        model_entry = day["models"].setdefault(model_name, {"requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+        model_entry["requests"] += 1
+        if is_success:
+            model_entry["success"] += 1
+        model_entry["prompt_tokens"] += prompt_tokens
+        model_entry["completion_tokens"] += completion_tokens
+        model_entry["total_tokens"] += total_tokens
+
     daily_list = sorted(daily.values(), key=lambda item: item["date"])
 
-    totals = {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "providers": {}}
+    totals = {"requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0, "providers": {}, "models": {}}
     for day in daily_list:
         totals["requests"] += day["requests"]
+        totals["success"] += day["success"]
         totals["prompt_tokens"] += day["prompt_tokens"]
         totals["completion_tokens"] += day["completion_tokens"]
         totals["total_tokens"] += day["total_tokens"]
         for provider_name, entry in day["providers"].items():
-            provider_total = totals["providers"].setdefault(provider_name, {"requests": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
-            for key in ("requests", "prompt_tokens", "completion_tokens", "total_tokens"):
+            provider_total = totals["providers"].setdefault(provider_name, {"requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            for key in ("requests", "success", "prompt_tokens", "completion_tokens", "total_tokens"):
                 provider_total[key] += entry[key]
+        for model_name, entry in day["models"].items():
+            model_total = totals["models"].setdefault(model_name, {"requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0})
+            for key in ("requests", "success", "prompt_tokens", "completion_tokens", "total_tokens"):
+                model_total[key] += entry[key]
+
+    models_breakdown = {}
+    for model_name, entry in totals["models"].items():
+        counts = model_providers.get(model_name, {})
+        provider_name = max(counts, key=counts.get) if counts else "unknown"
+        models_breakdown[model_name] = {**entry, "provider": provider_name}
+
+    quota_models, quota_status = _compute_quota_stats(supabase_service.get_usage_logs_today())
 
     return {
         "success": True,
         "days": days,
+        "model": model,
+        "models": quota_models,
+        "model_names": sorted(model_names.keys()),
+        "models_breakdown": models_breakdown,
+        "quota_status": quota_status,
         "daily": daily_list,
         "totals": totals,
     }
+
+
+@app.delete(
+    "/api/stats/usage/test-data",
+    summary="Delete test usage logs",
+    description=(
+        "Deletes all rows in `api_usage_logs` whose `provider_name` matches the given value "
+        "(defaults to `test_usage_tracking`), so test-only entries can be cleared and the "
+        "dashboard shows only real AI usage. Returns the number of deleted rows."
+    ),
+)
+async def clear_test_usage_data(provider: str = "test_usage_tracking"):
+    if not supabase_service.is_enabled():
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"success": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."},
+        )
+    deleted = supabase_service.delete_usage_logs_by_provider(provider)
+    return {"success": True, "deleted": deleted, "provider": provider}
 
 
 @app.get(
