@@ -123,25 +123,59 @@ class AIService:
             base_url += '/'
         return OpenAI(api_key=provider["key"], base_url=base_url)
 
-    def _log_usage(self, provider: Provider, response: Any, status: str = "success", job_id: Optional[str] = None) -> None:
+    @staticmethod
+    def _response_text(response: Any) -> str:
+        """Best-effort extraction of the assistant text from an OpenAI response."""
+        try:
+            choices = getattr(response, "choices", None) or []
+            if not choices:
+                return ""
+            first = choices[0]
+            if isinstance(first, dict):
+                message = first.get("message") or {}
+                return str(message.get("content") or "")
+            message = getattr(first, "message", None)
+            return str(getattr(message, "content", None) or "")
+        except Exception:
+            return ""
+
+    def _log_usage(self, provider: Provider, response: Any, status: str = "success", job_id: Optional[str] = None, prompt_text: str = "") -> None:
         """Persist token usage metrics returned by the OpenAI client.
 
-        Wrapped in try-except so a logging failure never breaks generation.
+        When the provider omits `usage` metadata the call is still counted:
+        tokens are estimated from the input/output text length (~4 chars per
+        token) and the row is flagged as estimated. Wrapped in try-except so
+        a logging failure never breaks generation.
         """
         try:
             usage = getattr(response, "usage", None)
-            if usage is None:
-                logger.debug("No usage metadata returned by %s", provider.get("name"))
-                return
+            estimated = False
 
             def _usage_value(attr: str) -> int:
                 if isinstance(usage, dict):
                     return int(usage.get(attr, 0) or 0)
                 return int(getattr(usage, attr, 0) or 0)
 
-            prompt_tokens = _usage_value("prompt_tokens")
-            completion_tokens = _usage_value("completion_tokens")
-            total_tokens = _usage_value("total_tokens") or (prompt_tokens + completion_tokens)
+            if usage is not None:
+                prompt_tokens = _usage_value("prompt_tokens")
+                completion_tokens = _usage_value("completion_tokens")
+                total_tokens = _usage_value("total_tokens") or (prompt_tokens + completion_tokens)
+                if prompt_tokens <= 0 and completion_tokens <= 0:
+                    estimated = True
+            else:
+                estimated = True
+
+            if estimated:
+                content = self._response_text(response)
+                prompt_tokens = max(1, int(len(prompt_text or "") / 4))
+                completion_tokens = max(1, int(len(content or "") / 4))
+                total_tokens = prompt_tokens + completion_tokens
+                logger.debug(
+                    "Estimating usage for %s (no metadata): prompt=%d completion=%d",
+                    provider.get("name"),
+                    prompt_tokens,
+                    completion_tokens,
+                )
 
             supabase_service.log_api_usage(
                 provider_name=provider.get("name", "unknown"),
@@ -151,6 +185,7 @@ class AIService:
                 total_tokens=total_tokens,
                 status=status,
                 job_id=job_id,
+                estimated=estimated,
             )
         except Exception as exc:
             logger.exception("Failed to log API usage for %s: %s", provider.get("name"), exc)
@@ -182,7 +217,7 @@ class AIService:
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Gateway returned empty content.")
-        self._log_usage(provider, response, status="success", job_id=job_id)
+        self._log_usage(provider, response, status="success", job_id=job_id, prompt_text=prompt)
         return content
 
     def test_provider(self, provider: Provider, user_prompt: str) -> ProviderTestResult:
@@ -231,6 +266,23 @@ class AIService:
     def test_all_providers(self, user_prompt: str) -> List[ProviderTestResult]:
         """Test every configured gateway independently."""
         return [self.test_provider(provider, user_prompt) for provider in self.providers]
+
+    def configured_models(self) -> List[Dict[str, str]]:
+        """Return configured provider/model pairs even if they have never been used.
+
+        `providers` is a flat list built from the env (nara/gemini/openrouter),
+        so a model may map to its primary provider only. This is used by the
+        dashboard to show every configured model/provider even with zero usage.
+        """
+        pairs: Dict[str, str] = {}
+        for provider in self.providers:
+            model = str(provider.get("model") or "unknown").strip() or "unknown"
+            if model not in pairs:
+                pairs[model] = str(provider.get("name") or "unknown").strip() or "unknown"
+        return [
+            {"model_name": model, "provider_name": provider}
+            for model, provider in pairs.items()
+        ]
 
     async def chat_requirements(self, messages: List[Dict[str, str]], job_id: Optional[str] = None) -> ChatResponse:
         """Gather module requirements via conversational Q&A before generation."""
@@ -291,7 +343,11 @@ class AIService:
         content = response.choices[0].message.content
         if not content:
             raise ValueError("Gateway returned empty chat content.")
-        self._log_usage(provider, response, status="success", job_id=job_id)
+        prompt_text = "\n".join(
+            str(m.get("content", "")) if isinstance(m, dict) else str(getattr(m, "content", ""))
+            for m in messages
+        )
+        self._log_usage(provider, response, status="success", job_id=job_id, prompt_text=prompt_text)
         return content
 
     async def _ensure_awaited(self, value: Any) -> Any:

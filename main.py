@@ -1085,14 +1085,23 @@ def _row_model_name(row: dict) -> str:
     return str(model_name).strip() or "unknown"
 
 
-def _compute_quota_stats(today_rows: list[dict]) -> tuple[list[dict], list[dict]]:
-    """Compute daily quota usage for every model defined in the `model_quotas` table.
+TEST_USAGE_PROVIDER = "test_usage_tracking"
 
-    - `limit_type = "requests"`: compare today's request count against `daily_limit`
-    - `limit_type = "tokens"`: compare today's `total_tokens` sum against `daily_limit`
 
-    "Today" is derived from the `created_at` timestamp of the logs (UTC day boundary),
-    so usage resets automatically each day.
+def _exclude_test_usage(rows: list[dict]) -> list[dict]:
+    """Drop rows recorded by the automated usage tests (`test_usage_tracking.py`)
+    so the dashboard only shows real AI consumption."""
+    return [row for row in rows if str(row.get("provider_name") or "").strip() != TEST_USAGE_PROVIDER]
+
+
+def _compute_quota_stats(rows: list[dict], window_days: int = 1) -> tuple[list[dict], list[dict]]:
+    """Compute quota usage for every model defined in the `model_quotas` table.
+
+    - `limit_type = "requests"`: compare the request count over the window against the limit
+    - `limit_type = "tokens"`: compare the `total_tokens` sum over the window against the limit
+
+    The effective limit is `daily_limit * window_days`, so a wider range (7d, 30d, all time)
+    scales the quota target accordingly; a `window_days` of 1 equals today's daily quota.
 
     Returns a tuple of:
       - `models`: per-model intelligence cards data (model_name, today_usage, success_rate,
@@ -1103,15 +1112,15 @@ def _compute_quota_stats(today_rows: list[dict]) -> tuple[list[dict], list[dict]
     if not quotas:
         return [], []
 
-    today_usage: dict[str, dict] = {}
-    for row in today_rows:
+    usage: dict[str, dict] = {}
+    for row in rows:
         model_name = _row_model_name(row)
         try:
             total_tokens = int(row.get("total_tokens") or 0)
         except (TypeError, ValueError):
             total_tokens = 0
         is_success = str(row.get("status") or "success").strip() == "success"
-        entry = today_usage.setdefault(model_name, {"requests": 0, "success": 0, "tokens": 0})
+        entry = usage.setdefault(model_name, {"requests": 0, "success": 0, "tokens": 0})
         entry["requests"] += 1
         entry["tokens"] += total_tokens
         if is_success:
@@ -1128,32 +1137,124 @@ def _compute_quota_stats(today_rows: list[dict]) -> tuple[list[dict], list[dict]
             daily_limit = 0
         if not model_name or daily_limit <= 0:
             continue
-        usage = today_usage.get(model_name, {"requests": 0, "success": 0, "tokens": 0})
+        window_limit = daily_limit * max(window_days, 1)
+        usage_entry = usage.get(model_name, {"requests": 0, "success": 0, "tokens": 0})
         if limit_type == "tokens":
-            current_usage = usage.get("tokens", 0)
+            current_usage = usage_entry.get("tokens", 0)
             unit = "Tokens"
         else:
-            current_usage = usage.get("requests", 0)
+            current_usage = usage_entry.get("requests", 0)
             unit = "Requests"
-        total_calls = usage.get("requests", 0)
-        success_rate = round((usage.get("success", 0) / total_calls) * 100, 2) if total_calls > 0 else 0.0
-        percent_used = round((current_usage / daily_limit) * 100, 2)
+        total_calls = usage_entry.get("requests", 0)
+        success_rate = round((usage_entry.get("success", 0) / total_calls) * 100, 2) if total_calls > 0 else 0.0
+        percent_used = round((current_usage / window_limit) * 100, 2)
         models.append({
             "model_name": model_name,
             "today_usage": current_usage,
             "success_rate": success_rate,
-            "remaining_quota": int(daily_limit) - current_usage,
+            "remaining_quota": int(window_limit) - current_usage,
             "unit": unit,
             "percent_used": percent_used,
         })
         quota_status.append({
             "model_name": model_name,
             "current_usage": current_usage,
-            "limit": int(daily_limit),
+            "limit": int(window_limit),
             "unit": unit,
             "percent_used": percent_used,
         })
     return models, quota_status
+
+
+def _build_usage_cards(total_models: dict, quotas: list[dict], today_rows: list[dict], window_days: int = 1) -> list[dict]:
+    """Model Intelligence Cards ranked by usage (most used models first).
+
+    Every configured/used model gets a card. Quota info (daily limit, unit,
+    remaining quota) is attached when the model exists in the `model_quotas`
+    table; otherwise the card shows window usage without a quota target.
+
+    Quota percentages/remaining are provided for both the selected window
+    (scaled as `daily_limit * window_days`) and today (`today_percent_used`,
+    `today_remaining_quota` against the plain daily limit).
+    """
+    today: dict[str, dict] = {}
+    for row in today_rows:
+        model_name = _row_model_name(row)
+        try:
+            total_tokens = int(row.get("total_tokens") or 0)
+        except (TypeError, ValueError):
+            total_tokens = 0
+        is_success = str(row.get("status") or "success").strip() == "success"
+        entry = today.setdefault(model_name, {"requests": 0, "success": 0, "tokens": 0})
+        entry["requests"] += 1
+        entry["tokens"] += total_tokens
+        if is_success:
+            entry["success"] += 1
+
+    quota_map: dict[str, dict] = {}
+    for quota in quotas:
+        model_name = str(quota.get("model_name") or "").strip()
+        if not model_name:
+            continue
+        limit_type = str(quota.get("limit_type") or "requests").strip().lower()
+        try:
+            daily_limit = float(quota.get("daily_limit") or 0)
+        except (TypeError, ValueError):
+            daily_limit = 0
+        quota_map[model_name] = {"limit_type": limit_type, "daily_limit": daily_limit}
+
+    cards: list[dict] = []
+    for model_name, stat in total_models.items():
+        requests = int(stat.get("requests") or 0)
+        total_tokens = int(stat.get("total_tokens") or 0)
+        success = int(stat.get("success") or 0)
+        success_rate = round((success / requests) * 100, 2) if requests > 0 else 0.0
+
+        today_entry = today.get(model_name, {"requests": 0, "success": 0, "tokens": 0})
+        today_requests = int(today_entry.get("requests") or 0)
+        today_tokens = int(today_entry.get("tokens") or 0)
+        today_success = int(today_entry.get("success") or 0)
+        today_success_rate = round((today_success / today_requests) * 100, 2) if today_requests > 0 else 0.0
+
+        quota = quota_map.get(model_name)
+        if quota and quota["daily_limit"] > 0:
+            limit_type = quota["limit_type"]
+            daily_limit = quota["daily_limit"]
+            unit = "Tokens" if limit_type == "tokens" else "Requests"
+            window_usage = total_tokens if limit_type == "tokens" else requests
+            today_usage = today_tokens if limit_type == "tokens" else today_requests
+            window_limit = daily_limit * max(window_days, 1)
+            percent_used = round((window_usage / window_limit) * 100, 2)
+            remaining_quota = int(window_limit) - window_usage
+            today_percent_used = round((today_usage / daily_limit) * 100, 2)
+            today_remaining_quota = int(daily_limit) - today_usage
+        else:
+            unit = "Tokens"
+            window_usage = 0
+            percent_used = 0
+            remaining_quota = 0
+            today_usage = 0
+            today_percent_used = 0
+            today_remaining_quota = 0
+
+        cards.append({
+            "model_name": model_name,
+            "requests": requests,
+            "total_tokens": total_tokens,
+            "success_rate": success_rate,
+            "today_usage": today_usage,
+            "today_requests": today_requests,
+            "today_tokens": today_tokens,
+            "today_success_rate": today_success_rate,
+            "remaining_quota": remaining_quota,
+            "percent_used": percent_used,
+            "today_remaining_quota": today_remaining_quota,
+            "today_percent_used": today_percent_used,
+            "unit": unit,
+        })
+
+    cards.sort(key=lambda card: card["total_tokens"], reverse=True)
+    return cards
 
 
 @app.get(
@@ -1180,16 +1281,16 @@ async def get_usage_stats(days: int = 30, model: Optional[str] = None):
         )
 
     normalized_model = model.strip() if model else None
-    rows = supabase_service.get_usage_logs(days=days, model=normalized_model)
+    window_days = 1 if days <= 0 else max(days, 1)
+    if days <= 0:
+        all_window_rows = _exclude_test_usage(supabase_service.get_usage_logs_today())
+    else:
+        all_window_rows = _exclude_test_usage(supabase_service.get_usage_logs(days=days))
+    rows = [row for row in all_window_rows if not normalized_model or _row_model_name(row) == normalized_model]
 
     model_names: dict[str, bool] = {}
-    if normalized_model:
-        all_rows = supabase_service.get_usage_logs(days=days)
-        for row in all_rows:
-            model_names[_row_model_name(row)] = True
-    else:
-        for row in rows:
-            model_names[_row_model_name(row)] = True
+    for row in all_window_rows:
+        model_names[_row_model_name(row)] = True
 
     model_providers: dict[str, dict[str, int]] = {}
     daily: dict[str, dict] = {}
@@ -1258,13 +1359,43 @@ async def get_usage_stats(days: int = 30, model: Optional[str] = None):
         provider_name = max(counts, key=counts.get) if counts else "unknown"
         models_breakdown[model_name] = {**entry, "provider": provider_name}
 
-    quota_models, quota_status = _compute_quota_stats(supabase_service.get_usage_logs_today())
+    today_rows = _exclude_test_usage(supabase_service.get_usage_logs_today())
+    _quota_models, quota_status = _compute_quota_stats(all_window_rows, window_days)
+    usage_cards = _build_usage_cards(
+        totals["models"],
+        supabase_service.get_model_quotas(),
+        today_rows,
+        window_days,
+    )
+
+    # Always surface every configured provider/model, even with zero usage,
+    # so the dashboard shows them regardless of whether they were called.
+    configured_models = ai_service.configured_models() if hasattr(ai_service, "configured_models") else []
+    for entry in configured_models:
+        model_name = entry["model_name"]
+        provider_name = entry["provider_name"]
+        if model_name not in models_breakdown:
+            models_breakdown[model_name] = {
+                "requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                "total_tokens": 0, "provider": provider_name,
+            }
+        if provider_name not in totals["providers"]:
+            totals["providers"][provider_name] = {
+                "requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                "total_tokens": 0,
+            }
+        if model_name not in totals["models"]:
+            totals["models"][model_name] = {
+                "requests": 0, "success": 0, "prompt_tokens": 0, "completion_tokens": 0,
+                "total_tokens": 0,
+            }
+        model_names[model_name] = True
 
     return {
         "success": True,
         "days": days,
         "model": model,
-        "models": quota_models,
+        "models": usage_cards,
         "model_names": sorted(model_names.keys()),
         "models_breakdown": models_breakdown,
         "quota_status": quota_status,

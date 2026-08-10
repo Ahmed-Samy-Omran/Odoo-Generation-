@@ -39,7 +39,7 @@ class SupabaseService:
         except Exception as exc:
             logger.exception("Supabase chat insert failed: %s", exc)
 
-    def log_api_usage(self, provider_name: str, model_name: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, status: str, job_id: Optional[str] = None) -> None:
+    def log_api_usage(self, provider_name: str, model_name: str, prompt_tokens: int, completion_tokens: int, total_tokens: int, status: str, job_id: Optional[str] = None, estimated: bool = False) -> None:
         if not self.is_enabled():
             return
         try:
@@ -53,6 +53,8 @@ class SupabaseService:
             }
             if job_id:
                 data["job_id"] = job_id
+            if estimated:
+                data["error_message"] = "estimated:true"
             self.client.table("api_usage_logs").insert(data).execute()
         except Exception as exc:
             logger.exception("Supabase usage log insert failed: %s", exc)
