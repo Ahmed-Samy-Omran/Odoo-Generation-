@@ -1,5 +1,9 @@
 import requests, json
-url='http://127.0.0.1:8000/generate-module/'
+from api_client import auth_headers
+
+BASE='http://127.0.0.1:8000'
+url=f'{BASE}/generate-module/'
+headers=auth_headers(BASE)
 payload={
   "modules":[
     {
@@ -14,7 +18,7 @@ payload={
   ]
 }
 
-r=requests.post(url, json=payload, timeout=10)
+r=requests.post(url, json=payload, headers=headers, timeout=10)
 print('status', r.status_code)
 try:
     print(r.json())

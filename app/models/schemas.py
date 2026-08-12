@@ -1,6 +1,25 @@
 from typing import List, Optional, Dict, Any, Literal
 from pydantic import BaseModel
 
+class LoginRequest(BaseModel):
+    """Login via local admin credentials OR a Supabase session access token.
+
+    - Local admin: ``{"username": ..., "password": ...}``
+    - Supabase user: ``{"provider": "supabase", "access_token": ...}``
+    """
+    username: Optional[str] = None
+    password: Optional[str] = None
+    provider: Optional[str] = None
+    access_token: Optional[str] = None
+
+
+class LoginResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    username: str
+    expires_in: int
+    role: str = "user"
+
 class FieldModel(BaseModel):
     name: str
     type: str

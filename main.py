@@ -12,7 +12,7 @@ import zipfile
 import re
 from datetime import datetime
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi_cache import FastAPICache
@@ -21,7 +21,7 @@ from redis import asyncio as aioredis
 from pydantic import BaseModel
 from typing import List, Optional
 
-from app.models.schemas import ComponentRegistryEntry, GeneratorPayload, ChatMessage, ChatRequest, ChatResponse
+from app.models.schemas import ComponentRegistryEntry, GeneratorPayload, ChatMessage, ChatRequest, ChatResponse, LoginRequest, LoginResponse
 from app.generators.OdooModuleGenerator import OdooModuleGenerator
 from app.services.zip_handler import ZipHandler
 from app.services.ai_service import AIService
@@ -30,6 +30,15 @@ from app.services.rag_service import RAGService
 from app.services.component_registry_service import ComponentRegistryService
 from app.services.learning_loop_service import append_learning_entry
 from app.services.supabase_service import supabase_service
+from app.services.auth_service import (
+    CurrentUser,
+    ROLE_GUEST,
+    authenticate_user,
+    create_access_token,
+    get_current_admin,
+    get_current_user,
+    JWT_EXPIRES_MINUTES,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -134,6 +143,7 @@ def _persist_job_to_supabase(job_id: str, job_data: dict) -> None:
             schema_preview=job_data.get("schema_preview"),
             zip_url=job_data.get("download_url"),
             github_url=job_data.get("github_url"),
+            user_id=job_data.get("user_id"),
         )
     except Exception as exc:
         logger.exception("Supabase persistence failed for job %s: %s", job_id, exc)
@@ -170,6 +180,7 @@ def _load_jobs() -> dict:
                         "schema_preview": row.get("schema_preview"),
                         "module_config": row.get("module_config"),
                         "chat_history": row.get("chat_history"),
+                        "user_id": row.get("user_id"),
                         "_module_paths": local_job.get("_module_paths") or [],
                         "_zip_path": local_job.get("_zip_path"),
                         "_zip_name": local_job.get("_zip_name"),
@@ -238,7 +249,7 @@ class JobStatus(BaseModel):
     schema_preview: Optional[dict] = None
 
 
-def _new_job(job_id: Optional[str] = None) -> str:
+def _new_job(job_id: Optional[str] = None, user_id: Optional[str] = None) -> str:
     assigned_id = job_id or str(uuid.uuid4())
 
     jobs[assigned_id] = {
@@ -252,6 +263,7 @@ def _new_job(job_id: Optional[str] = None) -> str:
         "error": None,
         "schema_preview": None,
         "module_config": None,
+        "user_id": user_id,
         "_module_paths": [],
         "_zip_path": None,
         "_zip_name": None,
@@ -300,6 +312,7 @@ def _ensure_job_loaded(job_id: str) -> Optional[dict]:
         "error": job_data.get("error"),
         "schema_preview": job_data.get("schema_preview"),
         "module_config": job_data.get("module_config"),
+        "user_id": job_data.get("user_id"),
         "_module_paths": [],
         "_zip_path": None,
         "_zip_name": None,
@@ -308,7 +321,68 @@ def _ensure_job_loaded(job_id: str) -> Optional[dict]:
     return jobs[job_id]
 
 
-def _build_schema_preview(modules: list) -> dict:
+def _ensure_job_access(job_id: str, current_user: CurrentUser) -> Optional[dict]:
+    """Return the local job dict if the caller may access it, else raise 403/404.
+
+    Admins can access every job; regular users only their own (or legacy jobs
+    that have no recorded owner)."""
+    job = jobs.get(job_id)
+    if job is None:
+        return None
+    if not current_user.is_admin:
+        owner = job.get("user_id")
+        if owner and owner != current_user.sub:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You do not have access to this job",
+            )
+    return job
+
+
+QUOTA_EXCEEDED_MESSAGE = "Daily quota exceeded. Please sign up or upgrade your plan to continue."
+
+
+def _enforce_daily_quota(current_user: CurrentUser) -> None:
+    """Reject a generation request when the user's daily token quota is spent.
+
+    - Admins bypass quota checks entirely.
+    - The limit comes from ``token_limit`` in the user's ``public.profiles`` row.
+    - When the profile/limit is missing, a configurable default is used
+      (``GUEST_TOKEN_LIMIT`` for anonymous guests, ``DEFAULT_TOKEN_LIMIT``
+      otherwise). A limit of 0 or negative means unlimited.
+    """
+    if current_user.is_admin:
+        return
+
+    limit = None
+    if supabase_service.is_enabled():
+        profile = supabase_service.get_user_profile(current_user.sub)
+        raw_limit = (profile or {}).get("token_limit")
+        if raw_limit is not None:
+            try:
+                limit = int(raw_limit)
+            except (TypeError, ValueError):
+                limit = None
+
+    if limit is None:
+        default_key = "GUEST_TOKEN_LIMIT" if current_user.is_guest else "DEFAULT_TOKEN_LIMIT"
+        default_raw = os.getenv(default_key, "").strip()
+        try:
+            limit = int(default_raw) if default_raw else 0
+        except (TypeError, ValueError):
+            limit = 0
+
+    if limit <= 0:
+        return
+
+    usage = supabase_service.get_user_usage_today(current_user.sub) if supabase_service.is_enabled() else {"tokens": 0}
+    tokens_used = int(usage.get("tokens") or 0)
+    if tokens_used >= limit:
+        logger.info("Quota exceeded for %s (used=%s limit=%s)", current_user.sub, tokens_used, limit)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=QUOTA_EXCEEDED_MESSAGE,
+        )
     """Build ERD + use-case preview data for frontend diagram animation."""
     models_out = []
     use_cases = []
@@ -784,7 +858,8 @@ async def _run_analyze_requirements_job(job_id: str, user_prompt: str, odoo_vers
         )
         await asyncio.sleep(0)
 
-        payload = await ai_service.analyze_requirements(user_prompt, odoo_version, job_id=job_id)
+        owner_id = jobs.get(job_id, {}).get("user_id")
+        payload = await ai_service.analyze_requirements(user_prompt, odoo_version, job_id=job_id, user_id=owner_id)
 
         payload_data = payload.model_dump()
         modules = payload_data.get("modules", [])
@@ -892,8 +967,113 @@ def health_check():
     return {"status": "ok"}
 
 
+@app.post(
+    "/api/auth/login",
+    response_model=LoginResponse,
+    summary="Authenticate (local admin or Supabase user) and receive a JWT",
+    description=(
+        "Two login paths:\n"
+        "- **Local admin (fallback)**: send `{username, password}` validated against "
+        "`ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env`; issues a JWT with `role: admin`.\n"
+        "- **Supabase user**: send `{provider: 'supabase', access_token: '<session token>'}`; "
+        "the token is verified against `GET {SUPABASE_URL}/auth/v1/user`, and a JWT with "
+        "`role: user` is issued with `sub` = the Supabase user id.\n\n"
+        "Include the returned token as `Authorization: Bearer <token>` on all other endpoints. "
+        "Token lifetime is controlled by `JWT_EXPIRES_MINUTES`."
+    ),
+)
+def login(payload: LoginRequest):
+    if payload.provider == "supabase":
+        if not payload.access_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Supabase access_token is required",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = supabase_service.verify_supabase_token(payload.access_token)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired Supabase session",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        # Anonymous Supabase sessions (no email) are identified as guests.
+        role = ROLE_GUEST if not user["email"] else "user"
+        token = create_access_token(user["id"], role=role, email=user["email"] or None)
+        return LoginResponse(
+            access_token=token,
+            username=user["email"] or user["id"],
+            role=role,
+            expires_in=JWT_EXPIRES_MINUTES,
+        )
+
+    if not authenticate_user(payload.username, payload.password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = create_access_token(payload.username, role="admin")
+    return LoginResponse(
+        access_token=token,
+        username=payload.username,
+        role="admin",
+        expires_in=JWT_EXPIRES_MINUTES,
+    )
+
+
+@app.get(
+    "/api/auth/me",
+    summary="Return the current user profile, role and remaining quota",
+    description=(
+        "Resolves the caller from the JWT and returns their identity plus quota "
+        "state: ``sub`` (user id), ``email``, ``role`` (admin/user/guest) and the "
+        "daily ``token_limit`` from ``public.profiles`` (falling back to the "
+        "``DEFAULT_TOKEN_LIMIT`` / ``GUEST_TOKEN_LIMIT`` env defaults) along with "
+        "today's token/request usage."
+    ),
+)
+def auth_me(current_user: CurrentUser = Depends(get_current_user)):
+    profile = {}
+    if supabase_service.is_enabled():
+        profile = supabase_service.get_user_profile(current_user.sub) or {}
+
+    raw_limit = profile.get("token_limit")
+    if raw_limit is not None:
+        try:
+            limit = int(raw_limit)
+        except (TypeError, ValueError):
+            limit = None
+    else:
+        limit = None
+    if limit is None:
+        default_key = "GUEST_TOKEN_LIMIT" if current_user.is_guest else "DEFAULT_TOKEN_LIMIT"
+        default_raw = os.getenv(default_key, "").strip()
+        try:
+            limit = int(default_raw) if default_raw else 0
+        except (TypeError, ValueError):
+            limit = 0
+
+    usage = (
+        supabase_service.get_user_usage_today(current_user.sub)
+        if supabase_service.is_enabled()
+        else {"tokens": 0, "requests": 0}
+    )
+
+    return {
+        "sub": current_user.sub,
+        "email": current_user.email,
+        "role": current_user.role,
+        "is_guest": current_user.is_guest,
+        "is_admin": current_user.is_admin,
+        "token_limit": int(limit or 0),
+        "tokens_used_today": int(usage.get("tokens") or 0),
+        "requests_used_today": int(usage.get("requests") or 0),
+    }
+
+
 @app.post("/rag/index")
-def index_rag_documents(reset: bool = False):
+def index_rag_documents(reset: bool = False, current_user: CurrentUser = Depends(get_current_user)):
     try:
         result = rag_service.index_directory(reset=reset)
         return JSONResponse(status_code=200, content=result)
@@ -903,7 +1083,7 @@ def index_rag_documents(reset: bool = False):
 
 
 @app.get("/rag/search")
-def search_rag_documents(query: str, top_k: int = 3):
+def search_rag_documents(query: str, top_k: int = 3, current_user: CurrentUser = Depends(get_current_user)):
     if not query:
         raise HTTPException(status_code=400, detail="Query is required")
     results = rag_service.search(query, top_k=top_k)
@@ -911,7 +1091,7 @@ def search_rag_documents(query: str, top_k: int = 3):
 
 
 @app.post("/chat/", response_model=ChatResponse)
-async def chat_requirements(request: ChatRequest):
+async def chat_requirements(request: ChatRequest, current_user: CurrentUser = Depends(get_current_user)):
     if not request.messages:
         raise HTTPException(status_code=400, detail="At least one message is required")
 
@@ -964,7 +1144,7 @@ async def chat_requirements(request: ChatRequest):
                     "role": "system",
                     "content": "Current module configuration context:\n" + json.dumps(existing_job.get("module_config"), ensure_ascii=False),
                 })
-            response = await ai_service.chat_requirements(payload_for_ai, job_id=request.job_id)
+            response = await ai_service.chat_requirements(payload_for_ai, job_id=request.job_id, user_id=current_user.sub)
             supabase_service.upsert_generation_job(
                 job_id=request.job_id,
                 status=existing_job.get("status", "running") if existing_job else "running",
@@ -977,10 +1157,10 @@ async def chat_requirements(request: ChatRequest):
         else:
             if language_hint:
                 payload.insert(0, {"role": "system", "content": language_hint})
-            response = await ai_service.chat_requirements(payload, job_id=request.job_id)
+            response = await ai_service.chat_requirements(payload, job_id=request.job_id, user_id=current_user.sub)
 
         for item in request.messages:
-            supabase_service.insert_chat_message(None, item.role, item.content)
+            supabase_service.insert_chat_message(current_user.sub, item.role, item.content)
         return response
     except Exception as exc:
         logger.exception("Chat failed")
@@ -1000,9 +1180,10 @@ async def chat_requirements(request: ChatRequest):
         "Download from `/download/{job_id}` (local_zip) or check `github_url` (github)."
     ),
 )
-async def generate_module(payload: GeneratorPayload):
+async def generate_module(payload: GeneratorPayload, current_user: CurrentUser = Depends(get_current_user)):
+    _enforce_daily_quota(current_user)
     provided_id = getattr(payload, 'job_id', None)
-    job_id = _new_job(provided_id)
+    job_id = _new_job(provided_id, user_id=current_user.sub)
     asyncio.create_task(_run_generate_module_job(job_id, payload))
     return _job_status_response(job_id)
 
@@ -1018,17 +1199,22 @@ async def generate_module(payload: GeneratorPayload):
         "Poll `/job/{job_id}` for progress and `estimated_remaining_sec`."
     ),
 )
-async def analyze_requirements_and_generate(user_prompt: UserPrompt):
-    job_id = _new_job(user_prompt.job_id)
+async def analyze_requirements_and_generate(user_prompt: UserPrompt, current_user: CurrentUser = Depends(get_current_user)):
+    _enforce_daily_quota(current_user)
+    job_id = _new_job(user_prompt.job_id, user_id=current_user.sub)
     asyncio.create_task(_run_analyze_requirements_job(job_id, user_prompt.prompt, user_prompt.odoo_version))
     return _job_status_response(job_id)
 
 
 @app.api_route("/job/{job_id}/sync-config", methods=["POST", "PATCH"])
-async def sync_job_config(job_id: str, payload: ModuleConfigSyncRequest):
+async def sync_job_config(job_id: str, payload: ModuleConfigSyncRequest, current_user: CurrentUser = Depends(get_current_user)):
     restored_job = _ensure_job_loaded(job_id)
     if not restored_job:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+    if not current_user.is_admin:
+        owner = restored_job.get("user_id")
+        if owner and owner != current_user.sub:
+            raise HTTPException(status_code=403, detail="You do not have access to this job")
 
     jobs[job_id]["module_config"] = payload.module_config
     jobs[job_id]["schema_preview"] = payload.schema_preview or jobs[job_id].get("schema_preview")
@@ -1053,9 +1239,14 @@ async def sync_job_config(job_id: str, payload: ModuleConfigSyncRequest):
 
 
 @app.get("/history")
-async def get_history():
-    jobs_list = supabase_service.get_generation_jobs()
-    chat_list = supabase_service.get_chat_history()
+async def get_history(current_user: CurrentUser = Depends(get_current_user)):
+    # Users only see their own records; admins see everything.
+    if current_user.is_admin:
+        jobs_list = supabase_service.get_generation_jobs()
+        chat_list = supabase_service.get_chat_history()
+    else:
+        jobs_list = supabase_service.get_generation_jobs(user_id=current_user.sub)
+        chat_list = supabase_service.get_chat_history(user_id=current_user.sub)
 
     # Return all jobs by job_id. Deletion is performed by job_id, so history
     # should not collapse separate records with the same module name.
@@ -1266,6 +1457,8 @@ def _build_usage_cards(total_models: dict, quotas: list[dict], today_rows: list[
         "line charts and 'Token Distribution by Model' views. Pass an optional `model` "
         "query parameter to filter by model name; read `model_names` for the distinct "
         "models in the window and `models_breakdown` for per-model totals.\n\n"
+        "By default only the **logged-in user's own usage** is returned. Admins may pass "
+        "`include_all=true` to view **global** usage across all users.\n\n"
         "The `models` array holds Model Intelligence Card data for every quota-tracked "
         "model: `model_name`, `today_usage` (Tokens or Requests per `limit_type`), "
         "`success_rate`, `remaining_quota` (`daily_limit` - today's usage), `unit` and "
@@ -1273,19 +1466,22 @@ def _build_usage_cards(total_models: dict, quotas: list[dict], today_rows: list[
         "counted against today's `created_at` boundary, so it resets automatically each day."
     ),
 )
-async def get_usage_stats(days: int = 30, model: Optional[str] = None):
+async def get_usage_stats(days: int = 30, model: Optional[str] = None, include_all: bool = False, current_user: CurrentUser = Depends(get_current_user)):
     if not supabase_service.is_enabled():
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             content={"success": False, "message": "Supabase is not configured. Set SUPABASE_URL and SUPABASE_KEY."},
         )
 
+    global_scope = bool(current_user.is_admin and include_all)
+    scope_user_id = None if global_scope else current_user.sub
+
     normalized_model = model.strip() if model else None
     window_days = 1 if days <= 0 else max(days, 1)
     if days <= 0:
-        all_window_rows = _exclude_test_usage(supabase_service.get_usage_logs_today())
+        all_window_rows = _exclude_test_usage(supabase_service.get_usage_logs_today(user_id=scope_user_id))
     else:
-        all_window_rows = _exclude_test_usage(supabase_service.get_usage_logs(days=days))
+        all_window_rows = _exclude_test_usage(supabase_service.get_usage_logs(days=days, user_id=scope_user_id))
     rows = [row for row in all_window_rows if not normalized_model or _row_model_name(row) == normalized_model]
 
     model_names: dict[str, bool] = {}
@@ -1359,7 +1555,7 @@ async def get_usage_stats(days: int = 30, model: Optional[str] = None):
         provider_name = max(counts, key=counts.get) if counts else "unknown"
         models_breakdown[model_name] = {**entry, "provider": provider_name}
 
-    today_rows = _exclude_test_usage(supabase_service.get_usage_logs_today())
+    today_rows = _exclude_test_usage(supabase_service.get_usage_logs_today(user_id=scope_user_id))
     _quota_models, quota_status = _compute_quota_stats(all_window_rows, window_days)
     usage_cards = _build_usage_cards(
         totals["models"],
@@ -1395,6 +1591,7 @@ async def get_usage_stats(days: int = 30, model: Optional[str] = None):
         "success": True,
         "days": days,
         "model": model,
+        "scope": "global" if global_scope else "personal",
         "models": usage_cards,
         "model_names": sorted(model_names.keys()),
         "models_breakdown": models_breakdown,
@@ -1413,7 +1610,7 @@ async def get_usage_stats(days: int = 30, model: Optional[str] = None):
         "dashboard shows only real AI usage. Returns the number of deleted rows."
     ),
 )
-async def clear_test_usage_data(provider: str = "test_usage_tracking"):
+async def clear_test_usage_data(provider: str = "test_usage_tracking", current_user: CurrentUser = Depends(get_current_admin)):
     if not supabase_service.is_enabled():
         return JSONResponse(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -1435,14 +1632,15 @@ async def clear_test_usage_data(provider: str = "test_usage_tracking"):
         "- `github_url` is set if `git_deploy_target` was `github`"
     ),
 )
-async def get_job_status(job_id: str):
-    if job_id not in jobs:
+async def get_job_status(job_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    job = _ensure_job_access(job_id, current_user)
+    if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
     return _job_status_response(job_id)
 
 
 @app.get("/job/{job_id}/restore")
-async def restore_job(job_id: str):
+async def restore_job(job_id: str, current_user: CurrentUser = Depends(get_current_user)):
     local_job = _ensure_job_loaded(job_id) or {}
     job_data = None
     if supabase_service.is_enabled():
@@ -1450,6 +1648,11 @@ async def restore_job(job_id: str):
 
     if not local_job and not job_data:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    if not current_user.is_admin:
+        owner = local_job.get("user_id") or (job_data.get("user_id") if job_data else None)
+        if owner and owner != current_user.sub:
+            raise HTTPException(status_code=403, detail="You do not have access to this job")
 
     module_config = local_job.get("module_config") if local_job.get("module_config") is not None else (job_data.get("module_config") if job_data else None)
     chat_history = (job_data.get("chat_history") if job_data else []) or []
@@ -1467,9 +1670,19 @@ async def restore_job(job_id: str):
     "/job/{job_id}",
     summary="Delete a saved job and its generated artifacts",
 )
-async def delete_job(job_id: str):
+async def delete_job(job_id: str, current_user: CurrentUser = Depends(get_current_user)):
     if not supabase_service.is_enabled() and job_id not in jobs:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+
+    if not current_user.is_admin:
+        owner = None
+        if job_id in jobs:
+            owner = jobs[job_id].get("user_id")
+        elif supabase_service.is_enabled():
+            remote = supabase_service.get_generation_job(job_id)
+            owner = (remote or {}).get("user_id")
+        if owner and owner != current_user.sub:
+            raise HTTPException(status_code=403, detail="You do not have access to this job")
 
     supabase_deleted = True
     if supabase_service.is_enabled():
@@ -1493,8 +1706,9 @@ async def delete_job(job_id: str):
     summary="Stream job progress as Server-Sent Events",
     description="SSE stream — pushes a JSON event every 2 seconds until done/error.",
 )
-async def stream_job_progress(job_id: str):
-    if job_id not in jobs:
+async def stream_job_progress(job_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    job = _ensure_job_access(job_id, current_user)
+    if job is None:
         raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
 
     async def event_generator():
@@ -1513,10 +1727,11 @@ async def stream_job_progress(job_id: str):
     summary="List generated files for a completed job",
     description="Returns the list of generated files for completed jobs.",
 )
-async def get_job_files(job_id: str):
-    if job_id not in jobs:
+async def get_job_files(job_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    job = _ensure_job_access(job_id, current_user)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    j = jobs[job_id]
+    j = job
     if j["status"] != "done":
         raise HTTPException(status_code=409, detail=f"Job is not done yet (status={j['status']})")
 
@@ -1541,10 +1756,11 @@ async def get_job_files(job_id: str):
     "/download/{job_id}",
     summary="Download the generated ZIP (local_zip jobs only)",
 )
-async def download_result(job_id: str):
-    if job_id not in jobs:
+async def download_result(job_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    job = _ensure_job_access(job_id, current_user)
+    if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
-    j = jobs[job_id]
+    j = job
     if j["status"] != "done":
         raise HTTPException(status_code=409, detail=f"Job is not done yet (status={j['status']})")
     if j.get("github_url"):
@@ -1566,7 +1782,7 @@ async def download_result(job_id: str):
 
 
 @app.get("/components", response_model=List[ComponentRegistryEntry])
-def list_components():
+def list_components(current_user: CurrentUser = Depends(get_current_user)):
     try:
         return component_registry_service.list_components()
     except ValueError as exc:

@@ -2,6 +2,9 @@ from fastapi.testclient import TestClient
 
 import main
 from main import app, jobs
+from app.services.auth_service import create_access_token
+
+AUTH = {"Authorization": f"Bearer {create_access_token('test-user')}"}
 
 
 def test_patch_sync_job_config_updates_job_state():
@@ -17,6 +20,7 @@ def test_patch_sync_job_config_updates_job_state():
 
     response = client.patch(
         f"/job/{job_id}/sync-config",
+        headers=AUTH,
         json={
             "module_config": {"module_name": "demo_module"},
             "schema_preview": {"module_name": "demo_module", "models": []},
@@ -51,7 +55,7 @@ def test_restore_prefers_latest_local_job_state(monkeypatch):
         },
     )
 
-    response = client.get(f"/job/{job_id}/restore")
+    response = client.get(f"/job/{job_id}/restore", headers=AUTH)
 
     assert response.status_code == 200
     assert response.json()["message"] == "Latest local state"
@@ -81,6 +85,7 @@ def test_analyze_requirements_endpoint_uses_odoo_version(monkeypatch):
 
     response = client.post(
         "/analyze-requirements/",
+        headers=AUTH,
         json={"prompt": "Build me a simple module", "job_id": job_id, "odoo_version": "16.0"},
     )
 

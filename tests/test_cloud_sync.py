@@ -1,6 +1,7 @@
 import asyncio
 
 import main
+from app.services.auth_service import CurrentUser
 
 
 def test_sync_job_config_updates_jobs_and_supabase(monkeypatch):
@@ -35,7 +36,7 @@ def test_sync_job_config_updates_jobs_and_supabase(monkeypatch):
         schema_preview={"module_name": "demo_module", "models": [], "actors": [], "use_cases": []},
     )
 
-    response = asyncio.run(main.sync_job_config(job_id, payload))
+    response = asyncio.run(main.sync_job_config(job_id, payload, current_user=CurrentUser(sub="test-user")))
 
     assert response["job_id"] == job_id
     assert main.jobs[job_id]["module_config"]["module_name"] == "demo_module"
@@ -74,7 +75,7 @@ def test_sync_job_config_recovers_missing_job_from_supabase(monkeypatch):
         schema_preview={"module_name": "new_module", "models": [], "actors": [], "use_cases": []},
     )
 
-    response = asyncio.run(main.sync_job_config(job_id, payload))
+    response = asyncio.run(main.sync_job_config(job_id, payload, current_user=CurrentUser(sub="test-user")))
 
     assert response["job_id"] == job_id
     assert main.jobs[job_id]["module_config"]["module_name"] == "new_module"
