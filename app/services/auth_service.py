@@ -36,6 +36,8 @@ if not JWT_SECRET:
 ROLE_ADMIN = "admin"
 ROLE_USER = "user"
 ROLE_GUEST = "guest"
+LOCAL_GUEST_SUB = "local-guest"
+ALLOW_LOCAL_GUEST = os.getenv("ALLOW_LOCAL_GUEST", "1").strip().lower() in ("1", "true", "yes", "on")
 
 
 @dataclass

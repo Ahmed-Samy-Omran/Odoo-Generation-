@@ -31,7 +31,9 @@ from app.services.component_registry_service import ComponentRegistryService
 from app.services.learning_loop_service import append_learning_entry
 from app.services.supabase_service import supabase_service
 from app.services.auth_service import (
+    ALLOW_LOCAL_GUEST,
     CurrentUser,
+    LOCAL_GUEST_SUB,
     ROLE_GUEST,
     authenticate_user,
     create_access_token,
@@ -977,12 +979,29 @@ def health_check():
         "`ADMIN_USERNAME` / `ADMIN_PASSWORD` from `.env`; issues a JWT with `role: admin`.\n"
         "- **Supabase user**: send `{provider: 'supabase', access_token: '<session token>'}`; "
         "the token is verified against `GET {SUPABASE_URL}/auth/v1/user`, and a JWT with "
-        "`role: user` is issued with `sub` = the Supabase user id.\n\n"
+        "`role: user` is issued with `sub` = the Supabase user id.\n"
+        "- **Local guest**: send `{provider: 'local'}` when `ALLOW_LOCAL_GUEST=1` (default); "
+        "issues a JWT with `role: guest` without Supabase.\n\n"
         "Include the returned token as `Authorization: Bearer <token>` on all other endpoints. "
         "Token lifetime is controlled by `JWT_EXPIRES_MINUTES`."
     ),
 )
 def login(payload: LoginRequest):
+    if payload.provider == "local":
+        if not ALLOW_LOCAL_GUEST:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Local guest login is disabled",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        token = create_access_token(LOCAL_GUEST_SUB, role=ROLE_GUEST)
+        return LoginResponse(
+            access_token=token,
+            username="guest",
+            role=ROLE_GUEST,
+            expires_in=JWT_EXPIRES_MINUTES,
+        )
+
     if payload.provider == "supabase":
         if not payload.access_token:
             raise HTTPException(
