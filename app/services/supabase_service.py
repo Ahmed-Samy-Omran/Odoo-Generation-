@@ -32,18 +32,22 @@ class SupabaseService:
         """Validate a Supabase session access token via ``GET /auth/v1/user``.
 
         Returns ``{"id": <user id>, "email": <email>}`` when the token is valid,
-        otherwise ``None``. No anon key is required; the user's own access token
-        is sent as the Bearer credential.
+        otherwise ``None``. The user's own access token is sent as the Bearer
+        credential and the project's API key is required by the Supabase REST API.
         """
         if not self.enabled or not access_token:
             return None
         try:
             response = httpx.get(
                 f"{SUPABASE_URL}/auth/v1/user",
-                headers={"Authorization": f"Bearer {access_token}"},
+                headers={
+                    "Authorization": f"Bearer {access_token}",
+                    "apikey": SUPABASE_KEY,
+                },
                 timeout=15,
             )
             if response.status_code != 200:
+                logger.warning("Supabase token verification returned %s: %s", response.status_code, response.text[:200])
                 return None
             data = response.json()
             user_id = data.get("id")
